@@ -60,10 +60,15 @@ jobs:
         run: |
           set -euo pipefail
           kmis="${REQUESTED:-$DEFAULT_KMIS}"
+          # 用 jq 而不是内联 python：内联 python 的引号在 YAML 折叠后容易
+          # 产生空输出，而空 matrix 会让 build job 根本不创建，日志里只看到
+          # prepare 成功、package 失败，很难定位。
           json=$(printf '%s' "$kmis" | tr ',' '\n' | sed '/^$/d' \
-                 | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+                 | tr -d ' ' | jq -R . | jq -s -c .)
           echo "matrix=$json" >> "$GITHUB_OUTPUT"
           echo "KMI 列表: $kmis"
+          echo "matrix JSON: $json"
+          [ "$json" != "[]" ] || { echo "::error::KMI matrix 为空"; exit 1; }
 
   build:
     name: Build (${{ matrix.kmi }})
@@ -182,6 +187,10 @@ jobs:
 
           STAGE="$RUNNER_TEMP/ksu"
           rm -rf "$STAGE"; mkdir -p "$STAGE/ko"
+          if ! compgen -G "dist/*.ko" > /dev/null; then
+            echo "::error::没有可打包的 ko，跳过 KernelSU 模块构建"
+            exit 1
+          fi
           cp dist/*.ko "$STAGE/ko/"
           cp ksu/module.prop ksu/customize.sh ksu/post-fs-data.sh ksu/service.sh ksu/uninstall.sh "$STAGE/"
           chmod 755 "$STAGE"/*.sh
