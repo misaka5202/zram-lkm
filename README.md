@@ -125,6 +125,39 @@ grep -E 'orig_data_size|compr_data_size' /sys/block/zram0/mm_stat
 Field 1 is original size and field 2 is compressed size; their ratio is the
 real compression ratio.
 
+## What else could be a module, and what cannot
+
+Worth separating the three cases, because "can I add X with a module?" has
+three different answers:
+
+| Kind | Example | Can a module do it? |
+|------|---------|---------------------|
+| Algorithm registration | `lz4k`, `lz4kd`, `842` | **Yes** — open namespace behind `crypto_register_alg()` |
+| Whole driver, when the kernel has it as `=m` | `zram`, `zsmalloc` | **Yes** — ship your own `.ko`, but you must unload the vendor's first |
+| Compile-time code path | `ZRAM_WRITEBACK`, `ZRAM_MULTI_COMP`, `ZRAM_RECOMPRESS` | **No** for the builtin `zram`; only reachable via the row above |
+
+The third row is why the second exists. On a kernel with `CONFIG_ZRAM=y` the
+writeback and multi-compress paths were never compiled and no module can conjure
+them. On a kernel with `CONFIG_ZRAM=m` you can build your own zram.ko that has
+them, at the cost of swapping out the system's swap backend.
+
+Not implemented here, deliberately:
+
+- **A custom `zram.ko` with `MULTI_COMP` / `RECOMPRESS`.** The win is real
+  (per-page choosing between a fast and a dense compressor, and re-compressing
+  cold pages in place), but the failure mode is losing swap on a device you
+  may not be able to reboot cleanly. That belongs behind an explicit opt-in,
+  not in a default package.
+- **A custom `zsmalloc.ko`.** Same reasoning; the only feature worth having is
+  `ZSMALLOC_STAT` for observability, which does not justify replacing the
+  allocator that holds every compressed page.
+- **`842`.** `CONFIG_CRYPTO_842` is absent on typical vendor kernels and the
+  algorithm is built for hardware accelerators; on zram it loses to lz4 on both
+  ratio and speed. Adding it would be a checkbox, not a feature.
+
+Algorithm registration is the one row where the answer is unambiguously yes,
+which is why this project stays in that row.
+
 ## Supported KMI
 
 | KMI | Kernel |
