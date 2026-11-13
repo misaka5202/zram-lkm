@@ -63,8 +63,12 @@ jobs:
           # 用 jq 而不是内联 python：内联 python 的引号在 YAML 折叠后容易
           # 产生空输出，而空 matrix 会让 build job 根本不创建，日志里只看到
           # prepare 成功、package 失败，很难定位。
+          # strategy.matrix 必须是**映射**，不能是裸数组。
+          # 之前输出 ["android12-5.10", ...]，fromJson 拿到数组，
+          # GitHub 无法展开成 job，结果 build 一个都没创建，日志里只看到
+          # prepare 成功 + package 失败，完全看不出真正原因。
           json=$(printf '%s' "$kmis" | tr ',' '\n' | sed '/^$/d' \
-                 | tr -d ' ' | jq -R . | jq -s -c .)
+                 | tr -d ' ' | jq -R . | jq -s -c '{kmi: .}')
           echo "matrix=$json" >> "$GITHUB_OUTPUT"
           echo "KMI 列表: $kmis"
           echo "matrix JSON: $json"
