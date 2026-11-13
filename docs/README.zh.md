@@ -106,14 +106,24 @@ AUTO_SWITCH=1
 | 追求低延迟（游戏、前台响应） | `lzo-rle`（内核自带，最快） |
 | 折中 | `lz4k` / `lz4k_oplus` |
 
-实测方式：
+**一定要在自己设备、自己数据上量**：网上流传的比值都是别人的设备和别人的
+数据。模块自带测量脚本：
 
 ```sh
-# 重置后写入一批数据，对比实际占用
-grep -E 'mem_used_total|compressed_data_size' /sys/block/zram0/mm_stat
+sh /data/adb/modules/zram_lkm/zram-bench.sh
 ```
 
-`mm_stat` 的第 2 列是压缩后大小，第 3 列是原始大小 —— 两者比值就是实际压缩率。
+它会逐个算法重建 zram0、写入同一份样本（一半重复文本、一半随机字节，比
+纯零或纯随机更接近日常负载），输出压缩率和写入耗时。结束后会恢复你原本的
+disksize、算法和 swap 状态。
+
+也可以直接看数字：
+
+```sh
+grep -E 'orig_data_size|compr_data_size' /sys/block/zram0/mm_stat
+```
+
+第 1 列是原始大小，第 2 列是压缩后大小 —— 两者比值就是实际压缩率。
 
 ## 支持的 KMI
 

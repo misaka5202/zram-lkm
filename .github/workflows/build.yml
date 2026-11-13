@@ -197,6 +197,7 @@ jobs:
           fi
           cp dist/*.ko "$STAGE/ko/"
           cp ksu/module.prop ksu/customize.sh ksu/post-fs-data.sh ksu/service.sh ksu/uninstall.sh "$STAGE/"
+          cp scripts/zram-bench.sh "$STAGE/"
           chmod 755 "$STAGE"/*.sh
           sed -i 's/\r$//' "$STAGE"/*.sh "$STAGE/module.prop"
 
@@ -212,6 +213,7 @@ jobs:
             rm -rf "$S"; mkdir -p "$S/ko"
             cp dist/*-"$kmi".ko "$S/ko/"
             cp ksu/module.prop ksu/customize.sh ksu/post-fs-data.sh ksu/service.sh ksu/uninstall.sh "$S/"
+            cp scripts/zram-bench.sh "$S/"
             chmod 755 "$S"/*.sh
             sed -i 's/\r$//' "$S"/*.sh "$S/module.prop"
             ( cd "$S" && zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-$kmi-arm64.zip" . )
