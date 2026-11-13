@@ -104,13 +104,25 @@ There is no universal winner; it depends on the workload.
 | Latency-sensitive (games, foreground UI) | `lzo-rle` (built in, fastest) |
 | Middle ground | `lz4k` / `lz4k_oplus` |
 
-Measure it:
+Measure it on your own device and your own data — every ratio published
+elsewhere was measured on somebody else's. The module ships a script:
 
 ```sh
-grep -E 'mem_used_total|compressed_data_size' /sys/block/zram0/mm_stat
+sh /data/adb/modules/zram_lkm/zram-bench.sh
 ```
 
-Field 2 is compressed size and field 3 is original size; their ratio is the
+It rebuilds zram0 once per available algorithm, writes a sample (half repeated
+text, half random bytes, which is closer to real usage than either extreme),
+and reports compression ratio and write time per algorithm. It saves and
+restores your disksize, algorithm and swap state afterwards.
+
+Or read the numbers directly:
+
+```sh
+grep -E 'orig_data_size|compr_data_size' /sys/block/zram0/mm_stat
+```
+
+Field 1 is original size and field 2 is compressed size; their ratio is the
 real compression ratio.
 
 ## Supported KMI
