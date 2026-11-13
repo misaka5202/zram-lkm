@@ -1,0 +1,4 @@
+# 内核构建对行尾敏感：CRLF 会让 Makefile / Kbuild 解析失败。
+* text=auto eol=lf
+*.patch text eol=lf
+*.ko binary
