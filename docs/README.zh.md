@@ -1,0 +1,193 @@
+# ZRAM LKM
+
+**在原始 Android GKI 内核上以可加载模块的方式扩展 ZRAM 压缩算法 —— 不重编内核、不刷 boot。**
+
+[English](../README.md) · [Releases](../../releases/latest)
+
+---
+
+厂商内核为了通过 GKI ABI 检查，通常只保留 `lzo-rle` 一种 ZRAM 压缩算法，
+其余算法（尤其 LZ4K 系列）在编译期就被裁掉了。本项目把这些算法做成 `.ko`，
+`insmod` 即可用，甚至在写 `comp_algorithm` 时会**自动按需加载**。
+
+## 包含的算法
+
+| 模块 | 算法名 | 来源 | 相对 lzo-rle |
+|------|--------|------|--------------|
+| `lz4k` | `lz4k` | 华为 | 压缩率更高，速度接近 LZ4 |
+| `lz4kd` | `lz4kd` | 华为 | LZ4K 的 delta 变体，利用页间相似性 |
+| `lz4k_oplus` | `lz4k_oplus` | OPPO | LZ4K 的 OPPO 分支实现 |
+
+## 为什么能做成模块
+
+关键在**压缩算法不是内核私有结构，而是 crypto 算法名空间的一部分**：
+
+```
+zram 写 comp_algorithm
+      ↓
+crypto_alloc_comp("lz4k")
+      ↓
+内核里查不到该算法 → request_module("crypto-lz4k")
+      ↓
+modprobe 找到 lz4k.ko 的 MODULE_ALIAS_CRYPTO("lz4k")
+      ↓
+模块加载 → crypto_register_alg() 注册 → zram 拿到算法
+```
+
+所以：
+
+- `CONFIG_CRYPTO_*` 只决定**内核自带**哪些算法，不影响能否**新增**
+- 模块带 `MODULE_ALIAS_CRYPTO(...)` 就会被 `request_module` 自动拉起，
+  不需要手工 `insmod`
+- 算法之间互不依赖，一个编不出来不影响其他
+
+对比一下**做不到**的情形：`CONFIG_ZRAM_WRITEBACK`、`CONFIG_CFS_BANDWIDTH`
+这类是**代码路径级**的编译开关，被 `#ifdef` 整段删除，模块没有可挂的点。
+压缩算法不属于这一类。
+
+## 安装
+
+下载 `zram-lkm-arm64.zip`（全 KMI）或 `zram-lkm-<kmi>-arm64.zip`（单 KMI），
+在 KernelSU / APatch 管理器里刷入，重启。
+
+模块在 `post-fs-data` 阶段**只加载模块**，不改动你的 zram 配置 —— 理由见下。
+
+手动加载：
+
+```sh
+insmod lz4k-<kmi>.ko
+insmod lz4kd-<kmi>.ko
+insmod lz4k_oplus-<kmi>.ko
+
+# 确认算法已注册
+cat /sys/block/zram0/comp_algorithm
+# lzo lzo-rle [lz4] lz4hc zstd deflate lz4k lz4kd lz4k_oplus
+#                                      ^^^^ 出现了
+```
+
+## 切换算法
+
+**注意：切 `comp_algorithm` 会重置 zram0，现有内容全部丢失。** Android 通常把
+zram0 当 swap 用，所以顺序很重要：
+
+```sh
+# 1. 记下当前大小
+SIZE=$(cat /sys/block/zram0/disksize)
+
+# 2. 停 swap
+swapoff /dev/block/zram0
+
+# 3. 切换算法
+echo lz4k > /sys/block/zram0/comp_algorithm
+
+# 4. 恢复大小并重新启用
+echo "$SIZE" > /sys/block/zram0/disksize
+mkswap /dev/block/zram0
+swapon /dev/block/zram0
+```
+
+想开机自动切换，在模块目录放 `zram_lkm.conf`：
+
+```sh
+ALGO=lz4k_oplus
+AUTO_SWITCH=1
+```
+
+默认 `AUTO_SWITCH=0`。开机阶段自动切换会清掉 swap 里已有的页，内存紧张的
+设备上这是实打实的风险，所以默认留给你自己决定时机。
+
+## 选择算法
+
+没有放之四海而皆准的答案，取决于你的负载：
+
+| 场景 | 建议 |
+|------|------|
+| 内存小、追求压缩率 | `lz4kd`（delta 变体，对相似页更省） |
+| 追求低延迟（游戏、前台响应） | `lzo-rle`（内核自带，最快） |
+| 折中 | `lz4k` / `lz4k_oplus` |
+
+实测方式：
+
+```sh
+# 重置后写入一批数据，对比实际占用
+grep -E 'mem_used_total|compressed_data_size' /sys/block/zram0/mm_stat
+```
+
+`mm_stat` 的第 2 列是压缩后大小，第 3 列是原始大小 —— 两者比值就是实际压缩率。
+
+## 支持的 KMI
+
+| KMI | 内核 |
+|-----|------|
+| `android12-5.10` | 5.10 |
+| `android13-5.10` | 5.10 |
+| `android13-5.15` | 5.15 |
+| `android14-5.15` | 5.15 |
+| `android14-6.1` | 6.1 |
+| `android15-6.6` | 6.6 |
+| `android16-6.12` | 6.12 |
+
+**仅 arm64。**
+
+## 更多扩展：换掉 zram.ko 本身
+
+如果设备是 `CONFIG_ZRAM=m`（很多厂商是），那 zram 本身也是模块，
+可以**自带一份 zram.ko** 替换厂商的：
+
+```sh
+swapoff /dev/block/zram0
+rmmod zram
+insmod /data/adb/modules/zram_lkm/zram.ko    # 自己编的，可以带新特性
+# 重新配置
+```
+
+这样能拿到内核编译期根本没有的东西，例如：
+
+- `ZRAM_MULTI_COMP`（多压缩流，6.4+）
+- `ZRAM_RECOMPRESS`（写回 + 重压缩，6.6+）
+- 更新版 zram 的 bug 修复
+
+**风险明显更高**：替换的是系统的 swap 后端，一旦新 zram.ko 与内核不匹配，
+轻则 swap 不可用，重则 OOM。本项目默认**不**做这件事，只在文档里说明可行性。
+
+检查你的设备是否具备前提：
+
+```sh
+zcat /proc/config.gz | grep -E '^CONFIG_ZRAM=|^CONFIG_ZSMALLOC='
+# CONFIG_ZRAM=m        ← 才能换
+# CONFIG_ZRAM=y        ← 编进内核了，换不了
+```
+
+## 构建
+
+CI 用 SukiSU-Ultra 的 DDK 容器，内含各 KMI 真实的 `vmlinux` / `Module.symvers`
+和匹配的 clang：
+
+```bash
+bash scripts/build_modules.sh <kmi> /opt/ddk/kdir/<kmi> "$PWD" "$PWD/out"
+```
+
+本地构建需要对应内核树：
+
+```bash
+bash scripts/build_modules.sh android14-6.1 ~/kernel/common "$PWD" "$PWD/out" \
+  LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+  CC=clang LD=ld.lld HOSTCC=clang HOSTLD=ld.lld O=out
+```
+
+## 源码与许可证
+
+算法源码来自 [SukiSU_patch](https://github.com/Pixel-Tent/SukiSU_patch) /
+[ABK](https://github.com/cachiusa/AnyKernel3) 的内核树补丁，本项目把它们改造为
+树外模块（补 `MODULE_ALIAS_CRYPTO`、整理 include、写独立 Makefile）。
+
+| 组件 | 来源 | 许可证 |
+|------|------|--------|
+| `lz4k` / `lz4kd` | 华为（Huawei Technologies） | GPL-2.0 |
+| `lz4k_oplus` | OPPO 分支 | GPL-2.0 |
+
+**GPL-2.0 要求分发二进制时提供对应源码。** 每个 Release 附带的
+`source-<tag>.tar.gz` 就是编出该版本 ko 的完整源码快照。
+
+**免责声明**：加载内核模块等同于以最高权限执行内核代码；切换 zram 压缩算法
+会清空该设备上已有的压缩数据。请确保有 fastboot / recovery 恢复手段。
