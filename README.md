@@ -19,6 +19,7 @@ zram is asked to use them.
 | `lz4kd` | `lz4kd` | Huawei | delta variant, exploits page similarity |
 | `lz4k_oplus` | `lz4k_oplus` | OPPO | OPPO's branch of LZ4K |
 | `lz4hc` | `lz4hc` | upstream LZ4 | best ratio of the LZ4 family; `lz4hc_level=` 3-16 |
+| `842` | `842` | IBM | carries the lib/842 reference codec; vendor kernels trim both `CONFIG_CRYPTO_842` and the codec itself. Slow -- present for completeness, not as a default |
 
 `lz4hc` is a registration-only module: it calls the `LZ4_compress_HC` /
 `LZ4_decompress_safe` the kernel already exports, so it carries no codec of its

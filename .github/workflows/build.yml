@@ -217,7 +217,7 @@ jobs:
           # 按 KMI 拆分
           for f in dist/*.ko; do
             [ -f "$f" ] || continue
-            kmi=$(basename "$f" | sed -E 's/^(lz4k|lz4kd|lz4k_oplus|lz4hc|zstdp)-(.*)\.ko$/\2/')
+            kmi=$(basename "$f" | sed -E 's/^(lz4k|lz4kd|lz4k_oplus|lz4hc|842|zstdp)-(.*)\.ko$/\2/')
             case "$kmi" in android*) ;; *) continue ;; esac
             S="$RUNNER_TEMP/one-$kmi"
             rm -rf "$S"; mkdir -p "$S/ko"
@@ -250,6 +250,7 @@ jobs:
             echo '| `lz4kd` | `lz4kd` | LZ4K 的 delta 变体，冷热页差异编码 |'
             echo '| `lz4k_oplus` | `lz4k_oplus` | OPPO 分支的 LZ4K |'
             echo '| `lz4hc` | `lz4hc` | 上游 LZ4HC，复用内核已导出的编解码器，只做 crypto 注册 |'
+            echo '| `842` | `842` | IBM 842 参考实现（慢），内核通常整个裁掉，模块自带编解码器 |'
             echo
             echo "### 为什么这样可以不重编内核"
             echo
