@@ -71,6 +71,7 @@ vendor variants) or something nobody has wrapped yet.
 | `lz4kd` | `lz4kd` | no — same |
 | `lz4k_oplus` | `lz4k_oplus` | no — same |
 | `lz4hc` | `lz4hc` | yes — reuses `LZ4_compress_HC` / `LZ4_decompress_safe` |
+| `842` | `842` | no — the codec is not built at all, so the module carries lib/842 |
 
 `lz4hc` is the interesting case. Vendor kernels commonly build the LZ4HC codec
 (`CONFIG_LZ4HC_COMPRESS=y`) but trim its crypto registration
