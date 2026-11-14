@@ -70,7 +70,16 @@ fi
 echo
 
 # ---- 逐算法测试 ----
-ALGOS=$(cat /sys/block/zram0/comp_algorithm 2>/dev/null | tr ' ' '\n' | sed 's/^\[//; s/\]$//' | grep -v '^$')
+#
+# 注意：comp_algorithm 只列出 zram 自己 backends[] 里编进去的那几个。
+# 模块注册的算法（lz4k / lz4kd / lz4k_oplus / lz4hc）不在那张表里，所以
+#   永远不会出现在这个文件 -- 只读它会把本项目提供的算法全漏掉。
+# 因此再扫一遍 /proc/crypto 里 type 为 compression 的 name，两者合并去重。
+builtin=$(cat /sys/block/zram0/comp_algorithm 2>/dev/null | tr ' ' '\n' \
+          | sed 's/^\[//; s/\]$//' | grep -v '^$')
+regd=$(awk '/^name[[:space:]]*:/{n=$3} /^type[[:space:]]*:/{if ($3=="compression" && n!="") print n}' \
+        /proc/crypto 2>/dev/null | sort -u)
+ALGOS=$(printf '%s\n%s\n' "$builtin" "$regd" | grep -v '^$' | sort -u)
 echo "可用算法：$(echo $ALGOS)"
 echo
 
