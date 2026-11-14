@@ -290,6 +290,7 @@
   ../include/linux/tracepoint-defs.h ../arch/arm64/include/asm/module.h \
   ../include/asm-generic/module.h ../include/linux/crc32.h \
   ../include/linux/bitrev.h ../arch/arm64/include/asm/bitrev.h \
+  include/generated/uapi/linux/version.h \
   arch/arm64/include/generated/asm/unaligned.h \
   ../include/asm-generic/unaligned.h \
   ../include/linux/unaligned/packed_struct.h ../include/linux/sw842.h \

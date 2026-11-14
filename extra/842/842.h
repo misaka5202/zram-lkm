@@ -78,7 +78,17 @@
 #include <linux/kernel.h>
 #include <linux/bitops.h>
 #include <linux/crc32.h>
+/*
+ * [KMI] linux 6.12 把 asm/unaligned.h 去掉了，get_unaligned_* 统一挪到
+ * linux/unaligned.h。按内核版本选头文件，否则 6.12 的 DDK 直接
+ * "fatal error: 'asm/unaligned.h' file not found"。
+ */
+#include <linux/version.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+#include <linux/unaligned.h>
+#else
 #include <asm/unaligned.h>
+#endif
 
 #include <linux/sw842.h>
 
