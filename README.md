@@ -18,6 +18,17 @@ zram is asked to use them.
 | `lz4k` | `lz4k` | Huawei | better ratio, speed close to LZ4 |
 | `lz4kd` | `lz4kd` | Huawei | delta variant, exploits page similarity |
 | `lz4k_oplus` | `lz4k_oplus` | OPPO | OPPO's branch of LZ4K |
+| `lz4hc` | `lz4hc` | upstream LZ4 | best ratio of the LZ4 family; `lz4hc_level=` 3-16 |
+
+`lz4hc` is a registration-only module: it calls the `LZ4_compress_HC` /
+`LZ4_decompress_safe` the kernel already exports, so it carries no codec of its
+own. Vendor kernels usually build that codec (`CONFIG_LZ4HC_COMPRESS=y`) and
+trim only the crypto registration.
+
+**How many algorithms are there in total?** Upstream has seven names zram can
+use, and zram itself enforces none of them — see
+[docs/ZRAM-ALGORITHMS.md](docs/ZRAM-ALGORITHMS.md) for the list, why
+`comp_algorithm` only ever shows a subset, and how to check a device.
 
 ## Why this can be a module
 
