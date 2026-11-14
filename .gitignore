@@ -9,3 +9,13 @@
 .tmp_versions/
 Module.symvers
 modules.order
+
+# kernel build artifacts
+*.o
+*.o.d
+*.ko
+*.mod
+*.mod.c
+.*.cmd
+modules.order
+Module.symvers
