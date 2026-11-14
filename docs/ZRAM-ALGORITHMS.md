@@ -104,3 +104,42 @@ ARM64, from fastest to best-ratio: `lz4` → `lz4k` → `lz4hc` (`lz4hc_level` 3
 → `zstd`. `lzo-rle` sits near `lz4k` on ratio with lower CPU. `lz4kd` and
 `lz4k_oplus` are worth trying when your pages are similar to each other, which
 is the common case for zram swap.
+
+## Making them appear in the list
+
+Everything above works, but `comp_algorithm` never printed any of it. That file
+comes from `zcomp_available_show()` walking a `static const char * const
+backends[]` array compiled into zram.ko -- fixed at build time. A module can
+register whatever it likes; the list will not change, and users read that list
+as the answer to "what can I pick".
+
+`zram_list.ko` fixes the view rather than the data, which is the same move as
+the namespace work in droidspaces-lkm: redirect the one function that produces
+the published view.
+
+- `zcomp_available_show()` is a global symbol in zram.ko, called only from the
+  `comp_algorithm` sysfs show handler, so one hook covers every zram device.
+- The hook is a 4-byte `b` over the first instruction; the displaced
+  instruction plus an absolute jump live in a page allocated next to the
+  target. It cannot be a direct branch to the module: with VA_BITS=39 the
+  general vmalloc area is tens of GB from kernel text (measured ~95GB here) and
+  `b` reaches 128MB.
+- The replacement calls the original through the trampoline for the built-in
+  list, then appends any of the ten names that `crypto_has_comp()` reports --
+  the same question zram itself asks, so nothing is hardcoded about which
+  modules happen to be loaded.
+
+Two deliberate refusals: if no page is available within reach, or the first
+instruction is PC-relative and would need relocation, the module does not hook
+and says why. A wrong trampoline writes garbage into live kernel text.
+
+**Not in the KernelSU zip, and not verified on hardware yet.** Load it by hand
+after zram:
+
+```sh
+insmod /path/zram_list-android14-6.1.ko
+cat /sys/block/zram0/comp_algorithm
+```
+
+If zram is not loaded yet it logs that and does nothing; insmod it again after
+zram appears. `rmmod zram_list` restores the original bytes.

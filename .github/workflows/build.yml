@@ -205,7 +205,14 @@ jobs:
             echo "::error::没有可打包的 ko，跳过 KernelSU 模块构建"
             exit 1
           fi
-          cp dist/*.ko "$STAGE/ko/"
+          # zram_list 会改写 zram 的内核函数，且尚未在真机验证过；不放进
+          # 开机自启的包里，只作为单独的 .ko 资产让用户手动 insmod。
+          for f in dist/*.ko; do
+            case "$(basename "$f")" in
+              zram_list-*) continue ;;
+            esac
+            cp "$f" "$STAGE/ko/"
+          done
           cp ksu/module.prop ksu/customize.sh ksu/post-fs-data.sh ksu/service.sh ksu/uninstall.sh "$STAGE/"
           cp scripts/zram-bench.sh "$STAGE/"
           chmod 755 "$STAGE"/*.sh
@@ -221,7 +228,12 @@ jobs:
             case "$kmi" in android*) ;; *) continue ;; esac
             S="$RUNNER_TEMP/one-$kmi"
             rm -rf "$S"; mkdir -p "$S/ko"
-            cp dist/*-"$kmi".ko "$S/ko/"
+            for f in dist/*-"$kmi".ko; do
+              case "$(basename "$f")" in
+                zram_list-*) continue ;;
+              esac
+              cp "$f" "$S/ko/"
+            done
             cp ksu/module.prop ksu/customize.sh ksu/post-fs-data.sh ksu/service.sh ksu/uninstall.sh "$S/"
             cp scripts/zram-bench.sh "$S/"
             chmod 755 "$S"/*.sh
