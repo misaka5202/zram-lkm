@@ -167,13 +167,23 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          if compgen -G "ko-all/*.ko" > /dev/null; then
-            cp ko-all/*.ko dist/
-          else
-            echo "::warning::没有下载到任何 ko"
+          # download-artifact 的 merge-multiple 偶尔会把文件留在子目录里，
+          # 或者合并没落盘（见过最后一个 artifact 缺 'completed successfully'
+          # 行、随后 ko-all/*.ko 匹配不到）。所以这里不假设层级，递归找。
+          echo '=== ko-all 实际内容 ==='
+          find ko-all -maxdepth 3 -type f 2>/dev/null | head -40 || true
+          found=0
+          while IFS= read -r f; do
+            cp -f "$f" dist/
+            found=$((found + 1))
+          done < <(find ko-all -type f -name '*.ko' 2>/dev/null)
+          if [ "$found" -eq 0 ]; then
+            echo '::error::没有找到任何 .ko，产物下载或合并失败'
+            exit 1
           fi
-          echo "=== dist ==="
-          ls -lh dist/ || true
+          echo "收集到 $found 个 .ko"
+          echo '=== dist ==='
+          ls -lh dist/
 
       - name: 生成源码快照 (GPL-2.0 要求)
         run: |
