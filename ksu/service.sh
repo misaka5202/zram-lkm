@@ -8,7 +8,7 @@ sleep 20
 {
     echo "--- late check $(date) ---"
     echo "loaded modules:"
-    lsmod 2>/dev/null | grep -E 'lz4k|lz4kd|zstdp' || echo "  (none)"
+    lsmod 2>/dev/null | grep -E 'lz4k|lz4kd|lz4hc|zstdp' || echo "  (none)"
     echo "zram0 comp_algorithm:"
     cat /sys/block/zram0/comp_algorithm 2>/dev/null || echo "  (no zram0)"
 } >> "$LOG" 2>&1

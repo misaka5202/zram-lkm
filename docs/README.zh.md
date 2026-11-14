@@ -17,6 +17,15 @@
 | `lz4k` | `lz4k` | 华为 | 压缩率更高，速度接近 LZ4 |
 | `lz4kd` | `lz4kd` | 华为 | LZ4K 的 delta 变体，利用页间相似性 |
 | `lz4k_oplus` | `lz4k_oplus` | OPPO | LZ4K 的 OPPO 分支实现 |
+| `lz4hc` | `lz4hc` | 上游 LZ4 | LZ4 系里压缩率最高；`lz4hc_level=` 可调 3-16 |
+
+`lz4hc` 是**只做注册**的模块：它直接调用内核已经导出的 `LZ4_compress_HC` /
+`LZ4_decompress_safe`，自己不携带编解码器。厂商内核通常把编解码器编了
+（`CONFIG_LZ4HC_COMPRESS=y`），只把 crypto 注册那一层裁掉。
+
+**一共有多少种算法？** 上游有 7 个 zram 能用的算法名，而 zram 本身一个都不
+强制——完整清单、为什么 `comp_algorithm` 只显示其中一部分、以及怎么查设备，
+见 [ZRAM-ALGORITHMS.zh.md](ZRAM-ALGORITHMS.zh.md)。
 
 ## 为什么能做成模块
 
