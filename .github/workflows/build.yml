@@ -1,4 +1,4 @@
-name: build ZRAM LKM
+name: build
 
 # 为全部支持的 arm64 GKI KMI 构建 ZRAM 压缩算法模块，并打包成按 KMI
 # 自动选择的 KernelSU 模块。
@@ -20,27 +20,26 @@ name: build ZRAM LKM
 # 构建用 SukiSU-Ultra 的 DDK 容器，内含该 KMI 真实的 vmlinux +
 # Module.symvers + 匹配的 clang 工具链。
 
+# 可复用构建工作流：只编译 + 打包 + 上传产物，**不发布**。
+# 由 ci.yml（push / PR）和 release.yml（打 tag）调用。
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       kmis:
         description: '逗号分隔的 KMI 列表，留空=全部'
         required: false
         type: string
         default: ''
-      ddk_release:
-        description: 'DDK 镜像 release 标签'
-        required: false
-        type: string
-        default: '20260828'
-      version:
-        description: 'Release 版本标签，例 v1.0.0；留空则用 v<日期>-<时间>'
+  workflow_dispatch:
+    inputs:
+      kmis:
+        description: '逗号分隔的 KMI 列表, 留空=全部'
         required: false
         type: string
         default: ''
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   TZ: Asia/Shanghai
@@ -213,7 +212,8 @@ jobs:
             esac
             cp "$f" "$STAGE/ko/"
           done
-          cp ksu/module.prop ksu/customize.sh ksu/post-fs-data.sh ksu/service.sh ksu/uninstall.sh "$STAGE/"
+          cp module/module.prop module/customize.sh module/post-fs-data.sh \
+          module/service.sh module/uninstall.sh module/action.sh "$STAGE/"
           cp scripts/zram-bench.sh "$STAGE/"
           chmod 755 "$STAGE"/*.sh
           sed -i 's/\r$//' "$STAGE"/*.sh "$STAGE/module.prop"
@@ -234,7 +234,8 @@ jobs:
               esac
               cp "$f" "$S/ko/"
             done
-            cp ksu/module.prop ksu/customize.sh ksu/post-fs-data.sh ksu/service.sh ksu/uninstall.sh "$S/"
+            cp module/module.prop module/customize.sh module/post-fs-data.sh \
+            module/service.sh module/uninstall.sh module/action.sh "$S/"
             cp scripts/zram-bench.sh "$S/"
             chmod 755 "$S"/*.sh
             sed -i 's/\r$//' "$S"/*.sh "$S/module.prop"
@@ -243,88 +244,3 @@ jobs:
 
           echo "=== 最终 dist ==="
           ls -lh dist/
-
-      - name: 发布 Release
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          TAG="${TAG}"
-          {
-            echo "在原始 GKI 内核上以**可加载模块**的方式给 ZRAM 补充压缩算法，不重编内核、不刷 boot。"
-            echo
-            echo "### 包含的算法"
-            echo
-            echo '| 模块 | 算法名 | 说明 |'
-            echo '|---|---|---|'
-            echo '| `lz4k` | `lz4k` | 华为 LZ4K，比标准 LZ4 压缩率更高 |'
-            echo '| `lz4kd` | `lz4kd` | LZ4K 的 delta 变体，冷热页差异编码 |'
-            echo '| `lz4k_oplus` | `lz4k_oplus` | OPPO 分支的 LZ4K |'
-            echo '| `lz4hc` | `lz4hc` | 上游 LZ4HC，复用内核已导出的编解码器，只做 crypto 注册 |'
-            echo '| `842` | `842` | IBM 842 参考实现（慢），内核通常整个裁掉，模块自带编解码器 |'
-            echo
-            echo "### 为什么这样可以不重编内核"
-            echo
-            echo '压缩算法通过 `crypto_register_alg()` 注册，是一套开放的算法名空间。'
-            echo '`CONFIG_CRYPTO_*` 只决定内核里默认有哪些算法，新增算法完全可以用模块补。'
-            echo '模块带 `MODULE_ALIAS_CRYPTO(...)`，所以 zram 写 `comp_algorithm` 时会'
-            echo '`request_module()` 自动加载，不需要手工 insmod。'
-            echo
-            echo "### 安装"
-            echo
-            echo '刷入 `zram-lkm-arm64.zip`（全 KMI）或 `zram-lkm-<kmi>-arm64.zip`（单 KMI），重启。'
-            echo
-            echo '模块在 `post-fs-data` 阶段只做 **加载模块**，不会改动你的 zram 配置。'
-            echo
-            echo "### 切换算法"
-            echo
-            echo '```sh'
-            echo '# 查看当前可用算法（带 [] 的是当前在用的）'
-            echo 'cat /sys/block/zram0/comp_algorithm'
-            echo
-            echo '# 切换（注意：会重置 zram0，现有内容丢失）'
-            echo 'swapoff /dev/block/zram0'
-            echo 'echo lz4k > /sys/block/zram0/comp_algorithm'
-            echo '# 重新设置大小并启用 swap'
-            echo 'echo ${disksize} > /sys/block/zram0/disksize'
-            echo 'mkswap /dev/block/zram0 && swapon /dev/block/zram0'
-            echo '```'
-            echo
-            echo '想开机自动切换，在模块目录放 `zram_lkm.conf`：'
-            echo
-            echo '```sh'
-            echo 'ALGO=lz4k_oplus'
-            echo 'AUTO_SWITCH=1'
-            echo '```'
-            echo
-            echo '默认 `AUTO_SWITCH=0`：开机自动切换会清掉 swap 里的页，内存紧张时有风险，'
-            echo '所以留给你自己决定时机。'
-            echo
-            echo "### 支持的 KMI"
-            echo
-            echo '`android12-5.10` `android13-5.10` `android13-5.15` `android14-5.15` `android14-6.1` `android15-6.6` `android16-6.12`'
-            echo
-            echo '仅 arm64。'
-            echo
-            echo "### 源码"
-            echo
-            echo '算法源码来自 SukiSU_patch / ABK 的内核树补丁，本仓库把它们改成树外模块。'
-            echo 'GPL-2.0 要求随二进制提供源码，见 `source-*.tar.gz`。'
-          } > notes.md
-          # 幂等：同 tag 已经存在（上一次跑到一半、或重跑）就改成覆盖上传，
-          # 而不是让 gh release create 报 "already exists" 把整条流水线打挂。
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG 已存在，改为覆盖资产"
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
-              --title "ZRAM LKM $TAG" --notes-file notes.md
-            gh release upload "$TAG" \
-              --repo "$GITHUB_REPOSITORY" --clobber \
-              dist/*.ko dist/*.zip dist/source-*.tar.gz
-          else
-            gh release create "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "ZRAM LKM $TAG" \
-              --notes-file notes.md \
-              dist/*.ko dist/*.zip dist/source-*.tar.gz
-          fi

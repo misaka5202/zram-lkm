@@ -1,17 +1,22 @@
 #!/system/bin/sh
-# 开机早期加载 zram 压缩算法模块。
+# post-fs-data.sh - 开机早期加载压缩算法模块
 #
-# 设计原则：**加载模块**和**启用算法**是两件事，这里只做前者。
+# 为什么用 post-fs-data 而不是 service.sh：
+#   KernelSU 文档把 post-fs-data 标为"阻塞、能不用就不用"，但这里的加载
+#   必须赶在 Android 配置 zram0 之前完成 —— 算法要在 zram 决定用哪个
+#   compressor 的时候就已经注册好。放到 late_start 就晚了。
+#   脚本只做 insmod，耗时在毫秒级，不接近 10 秒上限。
 #
-# 原因：切换 /sys/block/zram0/comp_algorithm 会重置该 zram 设备（现有内容
-# 丢失），而 Android 通常把 zram0 当 swap 用。开机阶段自动切换会清掉 swap
-# 里的页，在内存紧张时有实际风险。所以默认只加载模块，等系统跑起来后由
-# 用户自己（Scene / sysfs）决定何时切换。
+# 模块路径用规范写法：MODDIR=${0%/*}，不硬编码 /data/adb/modules/zram_lkm。
 #
-# 想开机自动切换的话，在模块目录放一个 zram_lkm.conf：
-#     ALGO=lz4k_oplus
-#     AUTO_SWITCH=1
-# 只有 AUTO_SWITCH=1 才会执行切换。
+# **加载模块** 与 **启用算法** 是两件事，这里只做前者。
+#   切换 /sys/block/zram0/comp_algorithm 会重置该 zram 设备（现有内容丢失），
+#   而 Android 通常把 zram0 当 swap 用。开机阶段自动切换会清掉 swap 里的页，
+#   内存紧张时有实际风险。所以默认只加载，由用户自己决定何时切换。
+#
+#   想开机自动切换，在模块目录放 zram_lkm.conf：
+#       ALGO=lz4k_oplus
+#       AUTO_SWITCH=1
 
 MODDIR=${0%/*}
 LOG="/data/local/tmp/zram_lkm.log"
@@ -21,7 +26,7 @@ CONF="$MODDIR/zram_lkm.conf"
 echo "=== zram_lkm $(date) ===" >> "$LOG"
 echo "kernel: $(uname -r)" >> "$LOG"
 
-for ko in "$MODDIR"/system/lib/modules/*.ko; do
+for ko in "$MODDIR"/ko/*.ko; do
     [ -f "$ko" ] || continue
     name=$(basename "$ko")
     if out=$(insmod "$ko" 2>&1); then

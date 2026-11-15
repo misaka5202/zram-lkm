@@ -1,6 +1,9 @@
 #!/system/bin/sh
-# 平台是 Magisk/KernelSU：模块在 post-fs-data 阶段已加载完成，这里只补一次
-# 状态输出，便于排查「insmod 成功但算法没出现」这类问题。
+# service.sh - late_start 阶段补一次状态快照
+#
+# 加载已经在 post-fs-data.sh 做完了；这里非阻塞地再记一笔，用来排查
+# 「insmod 成功但算法没出现在列表里」这类问题。
+
 MODDIR=${0%/*}
 LOG="/data/local/tmp/zram_lkm.log"
 

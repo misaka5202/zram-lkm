@@ -10,6 +10,18 @@
 其余算法（尤其 LZ4K 系列）在编译期就被裁掉了。本项目把这些算法做成 `.ko`，
 `insmod` 即可用，甚至在写 `comp_algorithm` 时会**自动按需加载**。
 
+## 项目状态
+
+**还没有正式版本。** 这里发布的每个 tag 都是 GitHub **pre-release（预览版）**。
+这些模块验证到"七个 KMI 都能编、在一个真机上能加载能压"；还没有跨厂商回归，
+所以请当成"试一试用、有问题反馈"的构建。
+
+| | |
+|---|---|
+| CI 做什么 | 编译全部 KMI，**不发布**；`.ko` 只作为 Actions artifact 保留 |
+| Release 做什么 | 只在打 tag（`vX.Y.Z`）时运行，发布**预览版** |
+| 去哪反馈 | [新建 issue](https://github.com/misaka5202/zram-lkm/issues/new/choose) |
+
 ## 包含的算法
 
 | 模块 | 算法名 | 来源 | 相对 lzo-rle |
@@ -205,22 +217,40 @@ zcat /proc/config.gz | grep -E '^CONFIG_ZRAM=|^CONFIG_ZSMALLOC='
 # CONFIG_ZRAM=y        ← 编进内核了，换不了
 ```
 
-## 构建
+## 构建与发布
 
-CI 用 SukiSU-Ultra 的 DDK 容器，内含各 KMI 真实的 `vmlinux` / `Module.symvers`
-和匹配的 clang：
+两个工作流，**刻意分开**：
 
-```bash
-bash scripts/build_modules.sh <kmi> /opt/ddk/kdir/<kmi> "$PWD" "$PWD/out"
+| 工作流 | 触发 | 是否发布 |
+|---|---|---|
+| [`ci.yml`](https://github.com/misaka5202/zram-lkm/blob/main/.github/workflows/ci.yml) | push 到 main、PR、手动 | 否，只留 artifact |
+| [`release.yml`](https://github.com/misaka5202/zram-lkm/blob/main/.github/workflows/release.yml) | 打 tag `vX.Y.Z`、手动指定 tag | 是，**只发预览版** |
+
+两者都调用可复用的
+[`build.yml`](https://github.com/misaka5202/zram-lkm/blob/main/.github/workflows/build.yml)，
+那个只负责编译打包。把发布从 CI 里拿掉，意味着 CI 绿灯永远不会把坏产物推到
+用户面前，而每次发布都对应某个人主动打的 tag。
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
-本地构建需要对应内核树：
+### 模块目录结构
 
-```bash
-bash scripts/build_modules.sh android14-6.1 ~/kernel/common "$PWD" "$PWD/out" \
-  LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
-  CC=clang LD=ld.lld HOSTCC=clang HOSTLD=ld.lld O=out
 ```
+module/
+├── module.prop       元数据
+├── customize.sh      安装期检查与提示
+├── post-fs-data.sh   按 KMI 加载 .ko（为什么必须早，见脚本头部注释）
+├── service.sh        late_start：往日志里补一次状态快照
+├── uninstall.sh      清理；刻意不 rmmod
+└── action.sh         「操作」按钮：已加载模块、crypto 列表、实时 comp_algorithm
+```
+
+`.ko` 放在模块自己的 `ko/` 目录里，从那里 insmod，**不再放进
+`system/lib/modules/`**。KernelSU 只有在装了 metamodule 时才会挂载 `system/`，
+原来那种放法等于悄悄给用户加了一个前提，没装 metamodule 的人会直接加载失败。
 
 ## 源码与许可证
 
