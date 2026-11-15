@@ -299,13 +299,19 @@ static size_t zl_build_builtin(const char *active, char *buf)
  */
 static size_t zl_filter(char *buf, size_t n, const char *active)
 {
-	char tmp[PAGE_SIZE];
 	size_t out = 0, i = 0;
 
-	while (i < n && out + 64 < sizeof(tmp)) {
-		size_t s = i, e;
+	/*
+	 * 原地过滤，不额外开缓冲区。
+	 *
+	 * 之前用 char tmp[PAGE_SIZE]，6.1+ 的 -Wframe-larger-than=2048 直接
+	 * 报错（android14-6.1 / 15-6.6 / 16-6.12 三个 KMI 因此没有产物）。
+	 * out 始终 <= 读位置，边读边往回写是安全的。
+	 */
+	while (i < n) {
+		size_t s, e, len;
 		char name[64];
-		size_t len;
+		size_t w;
 		bool bracketed = false;
 
 		while (i < n && buf[i] == ' ')
@@ -328,15 +334,17 @@ static size_t zl_filter(char *buf, size_t n, const char *active)
 		memcpy(name, buf + s, len);
 		name[len] = 0;
 
-		if (crypto_has_comp(name, 0, 0)) {
-			out += (size_t)scnprintf(tmp + out, sizeof(tmp) - out,
-						 "%s%s%s ",
-						 bracketed ? "[" : "", name,
-						 bracketed ? "]" : "");
-		}
+		if (!crypto_has_comp(name, 0, 0))
+			continue;
+
+		w = (size_t)scnprintf(buf + out, n - out, "%s%s%s ",
+				      bracketed ? "[" : "", name,
+				      bracketed ? "]" : "");
+		out += w;
 	}
 
-	memcpy(buf, tmp, out);
+	if (out < n)
+		buf[out] = 0;
 	return out;
 }
 

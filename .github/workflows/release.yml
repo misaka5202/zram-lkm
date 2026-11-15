@@ -1,0 +1,127 @@
+name: Release
+
+# 真发布：只有打 tag 才会走到这里。
+#
+# 当前阶段**只发 pre-release**：这些 .ko 只验证到"能编译 + 手动加载过"，
+# 还没有跨机型的完整回归。等有正式版了，把 --prerelease 去掉。
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 tag，例如 v0.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    name: publish
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出
+        uses: actions/checkout@v6
+
+      - name: 下载产物
+        uses: actions/download-artifact@v8
+        with:
+          pattern: '**/*'
+          path: ko-all
+          merge-multiple: true
+
+      - name: 整理
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find ko-all -name '*.ko' -exec cp {} dist/ \;
+          ls -lh dist/
+          [ -n "$(ls -A dist)" ] || { echo "::error::没有任何 .ko"; exit 1; }
+
+      - name: 生成源码快照 (GPL-2.0 要求)
+        run: |
+          set -euo pipefail
+          tar --exclude=.git --exclude=dist --exclude=ko-all \
+              --exclude='*.o' --exclude='*.ko' --exclude='*.mod*' \
+              -czf dist/source-$(date +%Y%m%d).tar.gz .
+
+      - name: 打包 KernelSU 模块
+        run: |
+          set -euo pipefail
+          command -v zip >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq zip unzip; }
+
+          stage() {
+            local dst="$1"; shift
+            rm -rf "$dst"; mkdir -p "$dst/ko"
+            cp module/module.prop module/customize.sh module/post-fs-data.sh \
+               module/service.sh module/uninstall.sh module/action.sh "$dst/"
+            chmod 755 "$dst"/*.sh
+            sed -i 's/\r$//' "$dst"/*.sh "$dst/module.prop"
+          }
+
+          # 全 KMI 合并包（zram_list 不随开机自启，单独作为资产发布）
+          stage "$RUNNER_TEMP/all"
+          for f in dist/*.ko; do
+            case "$(basename "$f")" in
+              zram_list-*) continue ;;
+            esac
+            cp "$f" "$RUNNER_TEMP/all/ko/"
+          done
+          ( cd "$RUNNER_TEMP/all" && zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-arm64.zip" . )
+
+          # 按 KMI 单包
+          for f in dist/*.ko; do
+            case "$(basename "$f")" in
+              zram_list-*) continue ;;
+            esac
+            kmi=$(basename "$f" | sed -E 's/^[a-z0-9_]+-(android[0-9]+-[0-9.]+)\.ko$/\1/')
+            case "$kmi" in android*) ;; *) continue ;; esac
+            stage "$RUNNER_TEMP/one-$kmi"
+            for g in dist/*-"$kmi".ko; do
+              case "$(basename "$g")" in
+                zram_list-*) continue ;;
+              esac
+              cp "$g" "$RUNNER_TEMP/one-$kmi/ko/"
+            done
+            ( cd "$RUNNER_TEMP/one-$kmi" && \
+              zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-$kmi-arm64.zip" . )
+          done
+          ls -lh dist/*.zip
+
+      - name: 创建 pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if [ -f docs/RELEASE-NOTES.md ]; then
+            cp docs/RELEASE-NOTES.md notes.md
+          else
+            printf 'ZRAM LKM %s (preview)\n\n' "$TAG" > notes.md
+          fi
+          cat notes.md
+
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "ZRAM LKM $TAG (preview)" \
+            --prerelease \
+            --notes-file notes.md \
+            dist/*.ko dist/*.zip dist/source-*.tar.gz
