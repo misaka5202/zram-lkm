@@ -350,7 +350,7 @@ static size_t zl_filter(char *buf, size_t n, const char *active)
 			continue;
 
 		/*
-		 * 不能用 scnprintf 往这里写：它写完后会补一个  ，而
+		 * 不能用 scnprintf 往这里写：它写完后会补一个 \0，而
 		 * out 后面紧跟的正是还没读到的下一个 token。第一版就是这么
 		 * 踩掉的 —— 写完 "lzo " 后 buf[4] 被置 0，下一个 token
 		 * "lzo-rle" 被当成空串丢掉，最终列表里少了 lzo-rle。
