@@ -225,22 +225,21 @@ jobs:
             echo "::error::没有可打包的 ko，跳过 KernelSU 模块构建"
             exit 1
           fi
-          # zram_list 会改写 zram 的内核函数，且尚未在真机验证过；不放进
-          # 开机自启的包里，只作为单独的 .ko 资产让用户手动 insmod。
-          for f in dist/*.ko; do
-            case "$(basename "$f")" in
-              zram_list-*) continue ;;
-            esac
-            cp "$f" "$STAGE/ko/"
-          done
-          cp module/module.prop module/customize.sh module/post-fs-data.sh \
-          module/service.sh module/uninstall.sh module/action.sh "$STAGE/"
+
+          cp module/module.prop module/customize.sh module/post-fs-data.sh                module/service.sh module/uninstall.sh module/action.sh "$STAGE/"
           cp scripts/zram-bench.sh "$STAGE/"
           chmod 755 "$STAGE"/*.sh
           sed -i 's/\r$//' "$STAGE"/*.sh "$STAGE/module.prop"
 
-          # 全 KMI 合并包。zip -1：.ko 是 ELF，-9 只能多压 9% 却慢十几倍。
+          # 全 KMI 合并包。zram_list 也放进来：Scene 等工具读的正是
+          # /sys/block/zram0/comp_algorithm，不加载它就看不到模块提供的算法。
+          # 它只钩一个函数（zcomp_available_show），挂不上时静默放弃，
+          # 不影响其它模块。
+          cp dist/*.ko "$STAGE/ko/"
+
+          # zip -1：.ko 是 ELF，-9 只能多压 9% 却慢十几倍。
           ( cd "$STAGE" && zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-arm64.zip" . )
+
 
           # 按 KMI 拆分
           for f in dist/*.ko; do
@@ -249,12 +248,7 @@ jobs:
             case "$kmi" in android*) ;; *) continue ;; esac
             S="$RUNNER_TEMP/one-$kmi"
             rm -rf "$S"; mkdir -p "$S/ko"
-            for f in dist/*-"$kmi".ko; do
-              case "$(basename "$f")" in
-                zram_list-*) continue ;;
-              esac
-              cp "$f" "$S/ko/"
-            done
+            cp dist/*-"$kmi".ko "$S/ko/"
             cp module/module.prop module/customize.sh module/post-fs-data.sh \
             module/service.sh module/uninstall.sh module/action.sh "$S/"
             cp scripts/zram-bench.sh "$S/"

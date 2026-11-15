@@ -133,13 +133,12 @@ Two deliberate refusals: if no page is available within reach, or the first
 instruction is PC-relative and would need relocation, the module does not hook
 and says why. A wrong trampoline writes garbage into live kernel text.
 
-**Not in the KernelSU zip, and not verified on hardware yet.** Load it by hand
-after zram:
+**Ships in the module zip and loads at boot.** Tools that read
+`/sys/block/zram0/comp_algorithm` for their algorithm picker -- Scene, for
+instance, which has no hardcoded compressor names and parses that file directly
+-- therefore see the module-provided algorithms too.
 
-```sh
-insmod /path/zram_list-android14-6.1.ko
-cat /sys/block/zram0/comp_algorithm
-```
-
-If zram is not loaded yet it logs that and does nothing; insmod it again after
-zram appears. `rmmod zram_list` restores the original bytes.
+If `zram` is not up yet when this module loads, it retries every 3 s for up to
+about a minute instead of giving up, since module load order is not guaranteed.
+When hooking fails it stays out of the way and the file remains untouched.
+`rmmod zram_list` restores the original bytes.
