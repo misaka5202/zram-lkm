@@ -244,7 +244,7 @@ jobs:
           # 按 KMI 拆分
           for f in dist/*.ko; do
             [ -f "$f" ] || continue
-            kmi=$(basename "$f" | sed -E 's/^(lz4k|lz4kd|lz4k_oplus|lz4hc|842|zstdp)-(.*)\.ko$/\2/')
+            kmi=$(basename "$f" | sed -E 's/^(lz4k|lz4kd|lz4k_oplus|lz4hc|842|zstdn|zstdp)-(.*)\.ko$/\2/')
             case "$kmi" in android*) ;; *) continue ;; esac
             S="$RUNNER_TEMP/one-$kmi"
             rm -rf "$S"; mkdir -p "$S/ko"

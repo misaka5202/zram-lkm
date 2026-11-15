@@ -97,7 +97,7 @@ for ko in "$MODDIR"/ko/*.ko; do
 done
 
 echo "--- loaded ---" >> "$LOG"
-lsmod 2>/dev/null | grep -E 'lz4k|lz4kd|zstdp' >> "$LOG"
+lsmod 2>/dev/null | grep -E 'lz4k|lz4kd|zstdn|zstdp' >> "$LOG"
 
 echo "--- zram0 comp_algorithm ---" >> "$LOG"
 cat /sys/block/zram0/comp_algorithm 2>/dev/null >> "$LOG"

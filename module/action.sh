@@ -14,7 +14,7 @@ echo
 
 echo "=== 已加载的算法模块 ==="
 if lsmod | grep -qE '^(lz4k|lz4kd|lz4hc|842|zram_list) '; then
-    lsmod | grep -E '^(lz4k|lz4kd|lz4k_oplus|lz4hc|842|zstdp|zram_list) '
+    lsmod | grep -E '^(lz4k|lz4kd|lz4k_oplus|lz4hc|842|zstdn|zstdp|zram_list) '
 else
     echo "未加载"
 fi

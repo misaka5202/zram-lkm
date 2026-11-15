@@ -40,7 +40,7 @@ clean_src() {
 
 # ---------------------------------------------------------------- 算法模块 ---
 # 目录名 == 模块名，Makefile 里 obj-m 已按此命名
-for m in lz4k lz4kd lz4k_oplus lz4hc 842 zram_list; do
+for m in lz4k lz4kd lz4k_oplus lz4hc 842 zstdn zram_list; do
     SRC="$WS/extra/$m"
     [ -f "$SRC/Makefile" ] || { warn "$m @ $KMI (无 Makefile)"; continue; }
     log "=== $m @ $KMI ==="
