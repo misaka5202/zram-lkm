@@ -31,6 +31,7 @@
 | `lz4k_oplus` | `lz4k_oplus` | OPPO | LZ4K 的 OPPO 分支实现 |
 | `lz4hc` | `lz4hc` | 上游 LZ4 | LZ4 系里压缩率最高；`lz4hc_level=` 可调 3-16 |
 | `842` | `842` | IBM | 自带 lib/842 参考实现；厂商内核通常把 `CONFIG_CRYPTO_842` 和编解码器一起裁掉。速度很慢，只为补齐算法，不作默认 |
+| `zstdn` / `zstdn_o` | `zstdn`, `zstdn_o` | OPPO | 一加把它做成 `oplus_bsp_zstdn`；和 `zstd` 同一套编解码，但跑在 level 1（`ZSTD_DEF_LEVEL 1`）。薄模块，复用内核 zstd，不复制编解码器 |
 
 `lz4hc` 是**只做注册**的模块：它直接调用内核已经导出的 `LZ4_compress_HC` /
 `LZ4_decompress_safe`，自己不携带编解码器。厂商内核通常把编解码器编了
