@@ -337,10 +337,24 @@ static size_t zl_filter(char *buf, size_t n, const char *active)
 		if (!crypto_has_comp(name, 0, 0))
 			continue;
 
-		w = (size_t)scnprintf(buf + out, n - out, "%s%s%s ",
-				      bracketed ? "[" : "", name,
-				      bracketed ? "]" : "");
-		out += w;
+		/*
+		 * 不能用 scnprintf 往这里写：它写完后会补一个  ，而
+		 * out 后面紧跟的正是还没读到的下一个 token。第一版就是这么
+		 * 踩掉的 —— 写完 "lzo " 后 buf[4] 被置 0，下一个 token
+		 * "lzo-rle" 被当成空串丢掉，最终列表里少了 lzo-rle。
+		 *
+		 * 直接按字节搬，只在最后统一补一次结尾。
+		 */
+		w = len + 1 + (bracketed ? 2 : 0);
+		if (out + w >= n)
+			continue;
+		if (bracketed)
+			buf[out++] = '[';
+		memcpy(buf + out, name, len);
+		out += len;
+		if (bracketed)
+			buf[out++] = ']';
+		buf[out++] = ' ';
 	}
 
 	if (out < n)
