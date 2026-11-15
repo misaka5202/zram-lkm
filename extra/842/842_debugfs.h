@@ -18,8 +18,19 @@
 #include <linux/module.h>
 #include <linux/types.h>
 
+/*
+ * [DUPLICATE-PARAM] 这里**不能**用 module_param_named：本头文件同时被
+ * 842_compress.c 和 842_decompress.c include，宏会在两个编译单元里各生成
+ * 一份 sysfs 参数，内核加载模块时报
+ *   sysfs: cannot create duplicate filename
+ *          '/module/842/parameters/template_counts'
+ * 直接 -EEXIST 失败（而且是模块加载阶段，走不到 init，dmesg 里连我们的
+ * 打印都看不到）。
+ *
+ * 统计本来就默认关闭、只为调试，所以干脆不要这个参数：两个 TU 各自持有一份
+ * static bool，恒为 false，模板统计不启用，行为与原版默认一致。
+ */
 static bool sw842_template_counts;
-module_param_named(template_counts, sw842_template_counts, bool, 0444);
 
 static atomic_t template_count[OPS_MAX], template_repeat_count,
 	template_zeros_count, template_short_data_count, template_end_count;
