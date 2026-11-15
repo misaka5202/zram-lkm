@@ -30,6 +30,11 @@ on:
         required: false
         type: string
         default: ''
+      package:
+        description: '是否打包模块 zip（只有发布需要）'
+        required: false
+        type: boolean
+        default: false
       ddk_release:
         description: 'DDK 镜像 release 标签（镜像名的一部分，不能空）'
         required: false
@@ -42,6 +47,11 @@ on:
         required: false
         type: string
         default: ''
+      package:
+        description: '是否打包模块 zip'
+        required: false
+        type: boolean
+        default: false
       ddk_release:
         description: 'DDK 镜像 release 标签（镜像名的一部分，不能空）'
         required: false
@@ -159,7 +169,8 @@ jobs:
   package:
     name: Package
     needs: [prepare, build]
-    if: always() && needs.build.result != 'cancelled'
+    # CI 不需要模块 zip 和源码快照，打包只在发布时做
+    if: always() && needs.build.result != 'cancelled' && inputs.package
     runs-on: ubuntu-latest
     steps:
       - name: 检出
@@ -254,3 +265,11 @@ jobs:
 
           echo "=== 最终 dist ==="
           ls -lh dist/
+
+      - name: 上传 dist
+        # 让 release.yml 直接复用这里的产物，不必再压一遍
+        uses: actions/upload-artifact@v7
+        with:
+          name: zram-lkm-dist
+          path: dist/
+          if-no-files-found: error

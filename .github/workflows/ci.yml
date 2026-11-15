@@ -34,6 +34,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       kmis: ${{ inputs.kmis || '' }}
+      package: false   # CI 不打包，产物只留 ko-* artifact
 
   summarize:
     name: summarize
