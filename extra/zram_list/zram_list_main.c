@@ -53,6 +53,12 @@
 /* 本项目可能提供的算法；只决定"列表里要不要多印一个名字" */
 static const char * const zl_candidates[] = {
 	"lz4k", "lz4kd", "lz4k_oplus", "lz4hc", "842",
+	/*
+	 * 厂商内核自带的树外算法也要列：本机 zstdp 已注册但不在 backends[]
+	 * 里，属于"能用但看不见"。zl_candidates 只决定要不要补印名字，
+	 * 是否真的存在仍由 crypto_has_comp() 判断，所以多写几个没副作用。
+	 */
+	"zstdp", "zstdn", "zstdn_o",
 };
 
 /* 内核自带的，用于在原函数不可用时兜底拼列表 */
@@ -63,16 +69,36 @@ static const char * const zl_builtin[] = {
 typedef ssize_t (*zcomp_available_show_fn)(const char *comp, char *buf);
 /* 内核自己的单条指令改写原语：处理页权限、icache 与 stop_machine */
 typedef int (*zl_patch_insn_fn)(void *addr, u32 insn);
+/* __vmalloc_node_range 没导出给模块，只能用 kallsyms 解析后调用 */
+typedef void *(*zl_vmalloc_range_fn)(unsigned long size, unsigned long align,
+				     unsigned long start, unsigned long end,
+				     gfp_t gfp_mask, pgprot_t prot,
+				     unsigned long vm_flags, int node,
+				     const void *caller);
 
 static zcomp_available_show_fn zl_orig;
 static zl_patch_insn_fn zl_patch_insn;
+static zl_vmalloc_range_fn zl_vmalloc_range;
 static unsigned long zl_target;
 static void *zl_tramp;
 static u32 zl_saved;
 static bool zl_hooked;
 
-/* 用 kprobe 的 symbol_name 查找，绕开 kptr_restrict 且不需要 KALLSYMS_ALL */
-static unsigned long zl_lookup(const char *name)
+/*
+ * 符号解析。
+ *
+ * 第一段用 kprobe 的 symbol_name 查找，绕开 kptr_restrict。但它只能找到
+ * "可探测"的函数：aarch64_insn_patch_text_nosync 这类在 kprobe 黑名单里的
+ * 就拿不到。
+ *
+ * 所以先只用 kprobe 拿到 kallsyms_lookup_name（它本身不在黑名单），后面所有
+ * 符号都交给它——CONFIG_KALLSYMS_ALL=y 时它能查到内核里任何符号，包括模块。
+ */
+typedef unsigned long (*zl_kln_fn)(const char *name);
+
+static zl_kln_fn zl_kln;
+
+static unsigned long zl_lookup_probe(const char *name)
 {
 	struct kprobe kp;
 	unsigned long addr;
@@ -86,6 +112,15 @@ static unsigned long zl_lookup(const char *name)
 	return addr;
 }
 
+static unsigned long zl_lookup(const char *name)
+{
+	if (!zl_kln)
+		zl_kln = (zl_kln_fn)zl_lookup_probe("kallsyms_lookup_name");
+	if (zl_kln)
+		return zl_kln(name);
+	return zl_lookup_probe(name);
+}
+
 static bool zl_reachable(unsigned long from, unsigned long to);
 
 /*
@@ -96,7 +131,7 @@ static bool zl_reachable(unsigned long from, unsigned long to);
  */
 static void *zl_alloc_near(unsigned long near, size_t size)
 {
-	unsigned long img_s, img_e, lo, hi;
+	unsigned long img_s, img_e;
 	void *mem;
 
 	if (!near)
@@ -105,20 +140,74 @@ static void *zl_alloc_near(unsigned long near, size_t size)
 	img_s = zl_lookup("_text");
 	img_e = zl_lookup("_end");
 
-	lo = near > ZL_REACH ? near - ZL_REACH : 0;
-	hi = near - SZ_4K;
-	if (lo >= hi)
-		return NULL;
-	/* 窗口和镜像有交集就放弃：不做绝对跳转兜底，宁可让它看不见 */
-	if (img_s && img_e && lo < img_e && hi > img_s)
-		return NULL;
+	/*
+	 * [WINDOW] 多窗口尝试。
+	 *
+	 * 只搜"夹取后剩下的一块"不够用：模块本身也分配在 vmalloc 区，镜像和
+	 * 目标之间的那几十 MB 往往已经被别的模块占满，vmap 找不到空洞直接
+	 * 返回 NULL。所以按多个距离、上下两个方向分别开窗。
+	 */
+	if (!zl_vmalloc_range) {
+		zl_vmalloc_range = (zl_vmalloc_range_fn)zl_lookup("__vmalloc_node_range");
+		if (!zl_vmalloc_range) {
+			pr_warn(ZL_NAME ": __vmalloc_node_range unresolved' + BS + 'n");
+			return NULL;
+		}
+	}
 
-	mem = __vmalloc_node_range(size, 1, lo, hi,
-				   GFP_KERNEL | __GFP_NOWARN, PAGE_KERNEL_EXEC,
-				   VM_FLUSH_RESET_PERMS, NUMA_NO_NODE,
-				   __builtin_return_address(0));
-	if (!mem)
+	{
+		static const unsigned long edges[] = {
+			SZ_4M, SZ_16M, SZ_64M, ZL_REACH - SZ_16M,
+		};
+		unsigned int k;
+
+		for (k = 0; k < ARRAY_SIZE(edges); k++) {
+			unsigned long span = edges[k];
+			int dir;
+
+			for (dir = 0; dir < 2; dir++) {
+				unsigned long wlo, whi;
+
+				if (dir == 0) {
+					wlo = near > span ? near - span : 0;
+					whi = near - SZ_4K;
+				} else {
+					wlo = near + SZ_4K;
+					whi = near + span;
+				}
+				if (wlo >= whi)
+					continue;
+
+				/* 夹到镜像之外 */
+				if (img_s && img_e && wlo < img_e && whi > img_s) {
+					if (near >= img_e)
+						wlo = img_e;
+					else if (near <= img_s)
+						whi = img_s;
+					else
+						continue;
+					if (wlo >= whi)
+						continue;
+				}
+
+				mem = zl_vmalloc_range(size, 1, wlo, whi,
+						       GFP_KERNEL | __GFP_NOWARN,
+						       PAGE_KERNEL_EXEC,
+						       VM_FLUSH_RESET_PERMS,
+						       NUMA_NO_NODE,
+						       __builtin_return_address(0));
+				if (mem) {
+					if (zl_reachable(near, (unsigned long)mem))
+						return mem;
+					vfree(mem);
+					mem = NULL;
+				}
+			}
+		}
+		pr_info(ZL_NAME ": no vmap hole in any window around %px' + BS + 'n",
+			(void *)near);
 		return NULL;
+	}
 
 	/* 拿到未必够得着，够不着就还回去 */
 	if (!zl_reachable(near, (unsigned long)mem)) {
@@ -201,6 +290,56 @@ static size_t zl_build_builtin(const char *active, char *buf)
 	return n;
 }
 
+/*
+ * 把原函数印出来的列表再筛一遍：只留 crypto_has_comp() 认可的。
+ *
+ * 本机实测厂商 backends[] 里有 zstdn / zstdn_o，列得出来但根本没注册，
+ * 用户照着选必然被 zram 拒绝。既然这个文件现在由我们生成，就不该继续
+ * 展示不可用的名字。
+ */
+static size_t zl_filter(char *buf, size_t n, const char *active)
+{
+	char tmp[PAGE_SIZE];
+	size_t out = 0, i = 0;
+
+	while (i < n && out + 64 < sizeof(tmp)) {
+		size_t s = i, e;
+		char name[64];
+		size_t len;
+		bool bracketed = false;
+
+		while (i < n && buf[i] == ' ')
+			i++;
+		s = i;
+		while (i < n && buf[i] != ' ')
+			i++;
+		e = i;
+		if (e <= s)
+			continue;
+
+		len = e - s;
+		if (buf[s] == '[' && buf[e - 1] == ']') {
+			bracketed = true;
+			s++;
+			len -= 2;
+		}
+		if (len >= sizeof(name))
+			continue;
+		memcpy(name, buf + s, len);
+		name[len] = 0;
+
+		if (crypto_has_comp(name, 0, 0)) {
+			out += (size_t)scnprintf(tmp + out, sizeof(tmp) - out,
+						 "%s%s%s ",
+						 bracketed ? "[" : "", name,
+						 bracketed ? "]" : "");
+		}
+	}
+
+	memcpy(buf, tmp, out);
+	return out;
+}
+
 static __nocfi ssize_t zl_show(const char *comp, char *buf)
 {
 	size_t n;
@@ -214,6 +353,9 @@ static __nocfi ssize_t zl_show(const char *comp, char *buf)
 	} else {
 		n = zl_build_builtin(comp, buf);
 	}
+
+	/* 去掉列着但没注册的幽灵条目 */
+	n = zl_filter(buf, n, comp);
 
 	for (i = 0; i < (int)ARRAY_SIZE(zl_candidates); i++) {
 		const char *name = zl_candidates[i];
