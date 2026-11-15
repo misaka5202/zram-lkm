@@ -11,6 +11,19 @@ algorithm at build time to satisfy GKI ABI checks. This project packages those
 algorithms as `.ko` files you `insmod` — and in fact they load *on demand* when
 zram is asked to use them.
 
+## Project status
+
+**No stable release yet.** Every tag here is a GitHub **pre-release (preview)**.
+These modules are verified to build for all seven KMIs and to load and compress
+on one device; they have not been regression-tested across vendors, so treat
+them as builds to try and report on.
+
+| | |
+|---|---|
+| What CI does | Compiles every KMI, publishes **nothing**; `.ko` files stay as Actions artifacts. |
+| What Release does | Runs only on a tag push (`vX.Y.Z`) and publishes a **pre-release**. |
+| Where to report | [New issue](https://github.com/misaka5202/zram-lkm/issues/new/choose) |
+
 ## Algorithms
 
 | Module | Algorithm name | Origin | Versus lzo-rle |
@@ -214,22 +227,40 @@ zcat /proc/config.gz | grep -E '^CONFIG_ZRAM=|^CONFIG_ZSMALLOC='
 # CONFIG_ZRAM=y        ← built in, cannot replace
 ```
 
-## Build
+## Build and release
 
-CI builds inside the SukiSU DDK container, which carries the real `vmlinux`,
-`Module.symvers` and matching clang per KMI:
+Two workflows, deliberately separate:
 
-```bash
-bash scripts/build_modules.sh <kmi> /opt/ddk/kdir/<kmi> "$PWD" "$PWD/out"
+| Workflow | Trigger | Publishes? |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | push to `main`, pull request, manual | No — artifacts only |
+| [`release.yml`](.github/workflows/release.yml) | tag `vX.Y.Z`, manual with a tag | Yes — **pre-release only** |
+
+Both call the reusable [`build.yml`](.github/workflows/build.yml), which only
+compiles and packages. A green CI check therefore can never put an artifact in
+front of users, and every release corresponds to a tag someone chose.
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
-Local builds need the matching kernel tree:
+### Module layout
 
-```bash
-bash scripts/build_modules.sh android14-6.1 ~/kernel/common "$PWD" "$PWD/out" \
-  LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
-  CC=clang LD=ld.lld HOSTCC=clang HOSTLD=ld.lld O=out
 ```
+module/
+├── module.prop        metadata
+├── customize.sh       install-time checks and messages
+├── post-fs-data.sh    insmod the per-KMI .ko (early, see its header for why)
+├── service.sh         late_start: appends a state snapshot to the log
+├── uninstall.sh       cleans up; deliberately does not rmmod
+└── action.sh          the Action button: loaded modules, crypto list, live comp_algorithm
+```
+
+The `.ko` files live in the module's own `ko/` directory and are insmodded from
+there. They are **not** placed under `system/lib/modules`: KernelSU only mounts
+`system/` when a metamodule is installed, so that layout silently requires
+something the user may not have.
 
 ## Sources and licensing
 

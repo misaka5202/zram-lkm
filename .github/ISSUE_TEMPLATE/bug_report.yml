@@ -1,0 +1,115 @@
+name: 问题反馈 / Bug report
+description: 算法加载不了、列表里看不到、切换失败等
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先说明一个最常见的误会：
+
+        **`comp_algorithm` 里没有某个算法，不等于加载失败。** 那个文件打印的
+        是 zram 编译期写死的 `backends[]` 数组，模块加的算法能用但不会自动
+        出现在里面。请以 `/proc/crypto` 和实际切换结果为准（下面的表单会问）。
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备型号与系统
+      placeholder: 例如：OPPO Find X7 (PHZ110)，Android 14，ColorOS 15
+    validations:
+      required: true
+
+  - type: input
+    id: kernel
+    attributes:
+      label: 内核版本
+      description: 终端执行 `uname -r` 的完整输出
+      placeholder: 例如：6.1.157-android14-11-o-g2d576b643492
+    validations:
+      required: true
+
+  - type: input
+    id: module_version
+    attributes:
+      label: 模块版本
+      placeholder: 例如：v0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: 现象
+      multiple: true
+      options:
+        - 模块装不上 / 管理器里看不到
+        - 模块装上了但 .ko 没加载（lsmod 里没有）
+        - insmod 报错
+        - /proc/crypto 里没有算法
+        - comp_algorithm 列表里看不到算法（可能只是显示问题）
+        - 切换算法失败
+        - 开机卡住 / 重启 / 进安全模式
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: action_output
+    attributes:
+      label: 「操作」按钮输出
+      description: KernelSU 模块页点「操作」后的完整输出，一屏覆盖大部分信息
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: cryptolist
+    attributes:
+      label: 已注册的压缩算法
+      description: |
+        `awk '/^name/ {n=$3} /^type/ {if ($3=="compression") print n}' /proc/crypto | sort -u`
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: loadlog
+    attributes:
+      label: 加载日志
+      description: |
+        `cat /data/local/tmp/zram_lkm.log`
+        以及手动 insmod 的话，贴那条命令的完整输出（含 dmesg 里对应的行）。
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: dmesg
+    attributes:
+      label: 内核日志
+      description: |
+        `dmesg | grep -iE 'lz4k|lz4hc|842|zram|crypto' | tail -50`
+        开机卡住的另附 `/sys/fs/pstore/console-ramoops-0` 的崩溃段落。
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 已用最新版本复测
+          required: true
+        - label: 已确认 `uname -r` 的主版本.次版本（如 6.1）与所选模块的 KMI 一致
+          required: true
+        - label: 理解 comp_algorithm 只是显示，判定可用性看 /proc/crypto 与实际切换
+          required: true
