@@ -25,6 +25,10 @@ lz4hc / 842，外加 zram_list）。
   时运行并强制 `--prerelease`。CI 绿灯不再可能把未验证的产物推给用户。
 - 模块目录按 KernelSU 规范整理：`MODDIR=${0%/*}`、去掉 `set_perm*`、新增
   `action.sh`。
+- **合并包会加载错 KMI 的模块**。`post-fs-data.sh` 原本是"ko/ 下有什么就
+  insmod 什么"，单 KMI 包没问题，但合并包里有 5 个算法 x 7 个 KMI = 35 个
+  .ko，会挨个去装别的内核版本编的模块。改布局时那步按 KMI 筛选的动作被
+  一起删掉了，现在补回脚本里：内核主版本优先推导 KMI，只加载匹配的那一组。
 - 修 `842` 无法加载：`module_param_named` 写在了被两个编译单元共同 include 的
   头文件里，生成两份同名 sysfs 参数，模块在加载阶段就 `-EEXIST` 失败（连 init
   都跑不到）。
