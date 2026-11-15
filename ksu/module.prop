@@ -1,6 +1,6 @@
 id=zram_lkm
 name=ZRAM LKM
-version=1.1.0
-versionCode=10002
+version=1.2.1
+versionCode=10003
 author=misaka5202
-description=在原始 GKI 内核上以模块方式扩展 ZRAM 压缩算法（lz4k / lz4kd / lz4k_oplus / lz4hc）。开机自动加载，无需重编内核。切换算法：echo lz4k > /sys/block/zram0/comp_algorithm
+description=在原始 GKI 内核上以模块方式扩展 ZRAM 压缩算法（lz4k / lz4kd / lz4k_oplus / lz4hc / 842），并提供 zram_list 让模块加载的算法出现在 comp_algorithm 列表里。开机自动加载，无需重编内核。
