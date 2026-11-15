@@ -1,6 +1,6 @@
 {
-  "version": "v0.1.2",
-  "versionCode": 20261117,
-  "zipUrl": "https://github.com/misaka5202/zram-lkm/releases/download/v0.1.2/zram-lkm-arm64.zip",
+  "version": "v0.1.3",
+  "versionCode": 20261118,
+  "zipUrl": "https://github.com/misaka5202/zram-lkm/releases/download/v0.1.3/zram-lkm-arm64.zip",
   "changelog": "https://raw.githubusercontent.com/misaka5202/zram-lkm/main/docs/CHANGELOG.md"
 }
