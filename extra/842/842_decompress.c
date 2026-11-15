@@ -165,6 +165,20 @@ static int __do_index(struct sw842_param *p, u8 size, u8 bits, u64 fsize)
 	u64 index, offset, total = round_down(p->out - p->ostart, 8);
 	int ret;
 
+	/*
+	 * [CVE-842-INDEX] 上游 38ed7182f349 修复。
+	 *
+	 * indexed copy 写 2/4/8 字节，但原来不检查输出容量。目标缓冲区偏小时
+	 * 会写过界，随后 p->olen -= size 是**无符号**减法，下溢成一个巨大值，
+	 * 于是之后所有 olen 边界检查都形同虚设，后续操作继续往界外写。
+	 *
+	 * 上游提交说明里写得很清楚：这条路径可通过 zram 的压缩回写触达，
+	 * 篡改 backing device 上的压缩数据即可在 KASAN 内核上打出
+	 * vmalloc-out-of-bounds。
+	 */
+	if (size > p->olen)
+		return -ENOSPC;
+
 	ret = next_bits(p, &index, bits);
 	if (ret)
 		return ret;
@@ -306,7 +320,15 @@ int sw842_decompress(const u8 *in, unsigned int ilen,
 			if (ret)
 				return ret;
 
-			if (p.out == out) /* no previous bytes */
+			/*
+			 * [CVE-842-REPEAT] 上游 deb631649882 修复。
+			 *
+			 * repeat 模板复制前 8 字节的输出块，但原来只在"完全没输出"
+			 * 时才拒绝。short-data 可以先产出 1~7 字节，紧接一个 repeat
+			 * 就会从输出缓冲区起始位置**之前**读，取决于映射可能触发
+			 * fault，或把相邻内核内存读进解压结果。
+			 */
+			if (p.out - p.ostart < 8) /* no complete previous block */
 				return -EINVAL;
 
 			/* copy rep + 1 */
@@ -344,6 +366,10 @@ int sw842_decompress(const u8 *in, unsigned int ilen,
 
 			if (!bytes || bytes > SHORT_DATA_BITS_MAX)
 				return -EINVAL;
+
+			/* [CVE-842-SHORT] 同上：写最多 7 字节，先前不查容量 */
+			if (bytes > p.olen)
+				return -ENOSPC;
 
 			while (bytes-- > 0) {
 				ret = next_bits(&p, &tmp, 8);
