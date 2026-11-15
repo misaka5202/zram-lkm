@@ -269,9 +269,20 @@ static bool zl_has_token(const char *buf, size_t len, const char *name)
 
 static size_t zl_append(char *buf, size_t n, const char *name, bool active)
 {
-	int w = scnprintf(buf + n, PAGE_SIZE - n, "%s%s%s ",
-			  active ? "[" : "", name, active ? "]" : "");
+	size_t room;
+	int w;
 
+	/*
+	 * 防御性检查：n 一旦超过 PAGE_SIZE，(PAGE_SIZE - n) 会按 size_t 下溢成
+	 * 一个巨大的值，scnprintf 就会写穿缓冲区。当前两个调用点都有上界检查，
+	 * 但把保证放在函数内部更稳 —— 以后改调用点不会重新引入这个洞。
+	 */
+	if (n >= PAGE_SIZE)
+		return n;
+	room = PAGE_SIZE - n;
+
+	w = scnprintf(buf + n, room, "%s%s%s ",
+		      active ? "[" : "", name, active ? "]" : "");
 	return n + (size_t)w;
 }
 
@@ -486,17 +497,29 @@ static void zl_remove(void)
 		return;
 	zl_hooked = false;
 
-	/* 先把入口恢复成原指令，再释放 trampoline */
+	/* 先把入口恢复成原指令，新调用不会再进来 */
 	if (zl_patch_insn && zl_target)
 		zl_patch_insn((void *)zl_target, zl_saved);
 
-	/* 入口已不指向 trampoline，等一次 RCU 保证没有在途调用 */
-	synchronize_rcu();
-	if (zl_tramp) {
-		vfree(zl_tramp);
-		zl_tramp = NULL;
-	}
-	zl_orig = NULL;
+	/*
+	 * [UAF] 这里**不能** vfree(zl_tramp)。
+	 *
+	 * synchronize_rcu() 只保证 RCU 读临界区结束，而 trampoline 是普通代码，
+	 * 不在任何 RCU 读临界区里。下面这条路径是真实存在的：
+	 *
+	 *   线程 A 读 sysfs -> 入口 b 到 tramp+20 -> 进 zl_show
+	 *   A 在 zl_show 里被抢占（sysfs 读可抢占）
+	 *   rmmod -> 恢复入口 -> synchronize_rcu() 立即返回（A 还没结束）
+	 *          -> vfree(tramp)
+	 *   A 恢复执行 -> 调 zl_orig -> 跳进已释放的 vmalloc 内存
+	 *
+	 * stop_machine() 也救不了：A 被抢占时并不在 trampoline 里，它是"准备"
+	 * 跳过去。所以唯一可靠的做法是让这块代码永远有效 —— 4KB 换掉一条 panic
+	 * 路径，值得。模块只在卸载时走这里，泄漏有上界。
+	 *
+	 * zl_orig 同理保留，不置 NULL：还在 zl_show 里的线程要继续用它。
+	 */
+	pr_info(ZL_NAME ": unhooked; trampoline page kept alive on purpose\n");
 }
 
 /*
