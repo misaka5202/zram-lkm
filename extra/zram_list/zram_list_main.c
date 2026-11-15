@@ -46,6 +46,7 @@
 #include <linux/string.h>
 #include <linux/types.h>
 #include <linux/vmalloc.h>
+#include <linux/workqueue.h>
 
 #define ZL_NAME		"zram_list"
 #define ZL_REACH	0x7000000UL	/* 112MB：b 的量程留 16MB 余量 */
@@ -498,19 +499,59 @@ static void zl_remove(void)
 	zl_orig = NULL;
 }
 
+/*
+ * [RETRY] zram 可能比本模块晚就绪。
+ *
+ * zram 是独立模块，开机顺序不保证。若本模块先加载，zcomp_available_show 还
+ * 解析不到；一次性放弃就意味着 Scene 这类读 comp_algorithm 的界面永远看不到
+ * 模块提供的算法。失败后挂延迟工作，每 3 秒重试，最多 20 次（约 1 分钟）——
+ * 够覆盖开机阶段的先后差异，zram 真没编进内核时也不会白转。
+ */
+#define ZL_RETRY_MAX	20
+#define ZL_RETRY_MS	3000
+
+static struct delayed_work zl_retry_work;
+static int zl_retry_left;
+
+static void zl_retry_fn(struct work_struct *w)
+{
+	int ret;
+
+	if (zl_hooked || zl_retry_left <= 0)
+		return;
+
+	ret = zl_install();
+	if (ret == -ENOENT && zl_retry_left-- > 0) {
+		schedule_delayed_work(&zl_retry_work,
+				      msecs_to_jiffies(ZL_RETRY_MS));
+		return;
+	}
+	if (ret)
+		pr_info(ZL_NAME ": giving up after retries (%d)\n", ret);
+}
+
 static int __init zl_init(void)
 {
-	int ret = zl_install();
+	int ret;
 
-	if (ret == -ENOENT)
-		pr_info(ZL_NAME ": zram not loaded yet; insmod this again after zram\n");
-	else if (ret)
+	INIT_DELAYED_WORK(&zl_retry_work, zl_retry_fn);
+	zl_retry_left = ZL_RETRY_MAX;
+
+	ret = zl_install();
+	if (ret == -ENOENT) {
+		pr_info(ZL_NAME ": zram not ready; retrying every %dms (max %d)\n",
+			ZL_RETRY_MS, ZL_RETRY_MAX);
+		schedule_delayed_work(&zl_retry_work,
+				      msecs_to_jiffies(ZL_RETRY_MS));
+	} else if (ret) {
 		pr_info(ZL_NAME ": not hooked (%d); comp_algorithm stays as-is\n", ret);
+	}
 	return 0;
 }
 
 static void __exit zl_exit(void)
 {
+	cancel_delayed_work_sync(&zl_retry_work);
 	zl_remove();
 }
 
