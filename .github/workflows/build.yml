@@ -30,6 +30,11 @@ on:
         required: false
         type: string
         default: ''
+      ddk_release:
+        description: 'DDK 镜像 release 标签（镜像名的一部分，不能空）'
+        required: false
+        type: string
+        default: '20260828'
   workflow_dispatch:
     inputs:
       kmis:
@@ -37,6 +42,11 @@ on:
         required: false
         type: string
         default: ''
+      ddk_release:
+        description: 'DDK 镜像 release 标签（镜像名的一部分，不能空）'
+        required: false
+        type: string
+        default: '20260828'
 
 permissions:
   contents: read
