@@ -233,7 +233,7 @@ Two workflows, deliberately separate:
 
 | Workflow | Trigger | Publishes? |
 |---|---|---|
-| [`ci.yml`](.github/workflows/ci.yml) | push to `main`, pull request, manual | No — artifacts only |
+| [`ci.yml`](.github/workflows/ci.yml) | push to `main`, pull request, manual | No — artifacts only. Builds **one** KMI by default (`android14-6.1`); pass `full_matrix: true` for all seven |
 | [`release.yml`](.github/workflows/release.yml) | tag `vX.Y.Z`, manual with a tag | Yes — **pre-release only** |
 
 Both call the reusable [`build.yml`](.github/workflows/build.yml), which only
