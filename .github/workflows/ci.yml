@@ -16,10 +16,15 @@ on:
   workflow_dispatch:
     inputs:
       kmis:
-        description: '逗号分隔的 KMI 列表, 留空=全部'
+        description: '要验证的 KMI（逗号分隔）。日常测试编一个就够了'
         required: false
         type: string
-        default: ''
+        default: 'android14-6.1'
+      full_matrix:
+        description: '构建全部 KMI（默认只编一个，发布才需要全量）'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,7 +38,11 @@ jobs:
     name: build
     uses: ./.github/workflows/build.yml
     with:
-      kmis: ${{ inputs.kmis || '' }}
+      # CI 是"这次改动还能不能编译"的快速验证，不是发布前全量回归。
+      # 默认只编一个 KMI：镜像拉取是每次构建的固定成本（实测约 54s），
+      # 7 个 KMI 就是 7 份，而关键路径只取决于最慢那一个 —— 全量不会让
+      # 结果更早出来，只多烧 runner 分钟。需要全量勾 full_matrix。
+      kmis: ${{ inputs.full_matrix && '' || (inputs.kmis || 'android14-6.1') }}
       package: false   # CI 不打包，产物只留 ko-* artifact
 
   summarize:
