@@ -26,9 +26,62 @@ CONF="$MODDIR/zram_lkm.conf"
 echo "=== zram_lkm $(date) ===" >> "$LOG"
 echo "kernel: $(uname -r)" >> "$LOG"
 
+# ---- 按 KMI 选 .ko ----
+#
+# 合并包里 ko/ 下有全部 KMI 的 .ko（5 个算法 x 7 个 KMI = 35 个）。
+# 不筛选的话会去加载别的内核版本编的模块，虽然只是 insmod 失败，但日志会被
+# 一堆 "unknown symbol" 淹没，真正的问题反而看不见。
+#
+# KMI 推导与 service.sh 一致：内核主版本优先，只有 5.10/5.15 这种跨两代的
+# 才看系统属性。
+detect_kmi() {
+    local krel major android pick rel
+    krel=$(uname -r)
+    major=$(echo "$krel" | grep -oE '^[0-9]+[.][0-9]+')
+    android=$(echo "$krel" | grep -oE 'android[0-9]+' | head -1)
+
+    if [ -z "$android" ]; then
+        case "$major" in
+            5.10) android="android12 android13" ;;
+            5.15) android="android13 android14" ;;
+            6.1)  android="android14" ;;
+            6.6)  android="android15" ;;
+            6.12) android="android16" ;;
+            6.18) android="android17" ;;
+            *)    android="" ;;
+        esac
+        if [ "$(echo $android | wc -w)" -gt 1 ]; then
+            rel=$(getprop ro.build.version.release 2>/dev/null | grep -oE '^[0-9]+')
+            [ -z "$rel" ] && rel=$(getprop ro.build.version.sdk 2>/dev/null)
+            case "$rel" in
+                31|32|12) pick=android12 ;; 33|13) pick=android13 ;;
+                34|14) pick=android14 ;; 35|15) pick=android15 ;;
+                36|16) pick=android16 ;; 37|17) pick=android17 ;;
+                *) pick="" ;;
+            esac
+            for c in $android; do [ "$c" = "$pick" ] && { android="$pick"; break; }; done
+        fi
+        android=$(echo "$android" | cut -d" " -f1)
+    fi
+    [ -n "$android" ] && [ -n "$major" ] && echo "$android-$major"
+}
+
+KMI=$(detect_kmi)
+echo "kmi: ${KMI:-未识别}" >> "$LOG"
+if [ -z "$KMI" ]; then
+    echo "[SKIP] 无法识别 KMI，拒绝猜测（会加载错内核版本编的模块）" >> "$LOG"
+fi
+
 for ko in "$MODDIR"/ko/*.ko; do
     [ -f "$ko" ] || continue
     name=$(basename "$ko")
+    # 有 KMI 信息时只加载匹配的那一组
+    case "$name" in
+        *-"$KMI".ko) ;;
+        *)
+            [ -n "$KMI" ] && continue
+            ;;
+    esac
     if out=$(insmod "$ko" 2>&1); then
         echo "[OK]   $name" >> "$LOG"
     else
