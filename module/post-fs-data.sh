@@ -82,6 +82,13 @@ for ko in "$MODDIR"/ko/*.ko; do
             [ -n "$KMI" ] && continue
             ;;
     esac
+    # 已加载就跳过，别记成失败 —— 重跑脚本或手动调用时这很常见
+    modname=${name%-android*}
+    if grep -q "^${modname} " /proc/modules 2>/dev/null; then
+        echo "[SKIP] $name (已加载)" >> "$LOG"
+        continue
+    fi
+
     if out=$(insmod "$ko" 2>&1); then
         echo "[OK]   $name" >> "$LOG"
     else
