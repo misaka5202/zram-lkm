@@ -102,11 +102,15 @@ echo lz4hc > /sys/block/zram0/comp_algorithm && echo worked
 ## Which to use
 
 Ratio and speed are device- and workload-specific, so this project ships
-`scripts/zram-bench.sh` rather than a table of claims. As a rough ordering on
-ARM64, from fastest to best-ratio: `lz4` → `lz4k` → `lz4hc` (`lz4hc_level` 3-16)
-→ `zstd`. `lzo-rle` sits near `lz4k` on ratio with lower CPU. `lz4kd` and
-`lz4k_oplus` are worth trying when your pages are similar to each other, which
-is the common case for zram swap.
+`scripts/zram-bench.sh` rather than a table of claims. The README does carry one
+measured run with its provenance and its noise stated — useful as an order of
+magnitude, useless as a ranking. See
+[Choosing an algorithm](../README.md#choosing-an-algorithm).
+
+As a rough ordering on ARM64, from fastest to best-ratio: `lz4` → `lz4k` →
+`lz4hc` (`lz4hc_level` 3-16) → `zstd`. `lzo-rle` sits near `lz4k` on ratio with
+lower CPU. `lz4kd` and `lz4k_oplus` are worth trying when your pages are similar
+to each other, which is the common case for zram swap.
 
 ## Making them appear in the list
 
