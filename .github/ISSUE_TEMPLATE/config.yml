@@ -1,8 +1,15 @@
+# Issue 模板选择页的配置
+#
+# GitHub 的这个页面没有 i18n 机制：name / description 对所有访客渲染同一份，
+# 不按 locale 分发。所以这里两个名字并列，模板本身拆成两份
+# （bug_report.yml 中文、bug_report.en.yml 英文），由用户自己选。
+
 blank_issues_enabled: false
 contact_links:
-  - name: 算法与列表的说明
+  - name: 算法与列表的说明 / Algorithms and the list
     url: https://github.com/misaka5202/zram-lkm/blob/main/docs/ZRAM-ALGORITHMS.md
-    about: 为什么某些算法能用却不出现在 comp_algorithm 里
-  - name: 使用说明
+    about: 为什么某些算法能用却不出现在 comp_algorithm 里。Why an algorithm can work yet be missing from comp_algorithm.
+
+  - name: 使用说明 / Installation and usage
     url: https://github.com/misaka5202/zram-lkm#readme
-    about: 安装、切换算法、风险提示
+    about: 安装、切换算法、风险提示。Install, switching, and the risks involved.
