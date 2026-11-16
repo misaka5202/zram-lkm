@@ -100,9 +100,16 @@ static bool literal_decompress(
 	BYTE *const dest_copy_end = *dest_at + lit_length;
 	/* literals to be copied are small */
 	if (likely(lit_length <= NR_COPY_MIN)) {
-		if (likely(*source_at <= source_end - NR_COPY_MIN))
+		/* 源和目标两侧都要查余量。这里原来只查 source_end：小字面量
+		 * 快路径无条件写 NR_COPY_MIN 字节，dest_at 一旦接近 dest_end
+		 * 就越界写内核内存。华为原版 out_non_repeat() 的两个分支都带
+		 * out_end 检查，OPPO 变体把它们漏掉了。大字面量分支本来就查
+		 * dest_copy_end <= dest_end，证明这是遗漏而不是设计。 */
+		if (likely(*source_at <= source_end - NR_COPY_MIN &&
+			   *dest_at <= dest_end - NR_COPY_MIN))
 			LZ4_memcpy(*dest_at, *source_at, NR_COPY_MIN);
-		else if (source_copy_end <= source_end)
+		else if (source_copy_end <= source_end &&
+			 dest_copy_end <= dest_end)
 			LZ4_memcpy(*dest_at, *source_at, lit_length);
 		else
 			return false;
@@ -201,12 +208,20 @@ static int decompress(
 		/* get literal length and decompress */
 		if (unlikely(lit_length == mask(lit_log2))) {
 			source_at = get_size(&lit_length, source_at, source_end);
+			/* get_size 在扩展字节越过 source_end 时返回 NULL。
+			 * 华为原版 lz4k_decode.c:162 每处 get_size 后都查 NULL，
+			 * OPPO 变体漏了 —— 畸形压缩流会在 literal_decompress
+			 * 里对 NULL 做指针算术并解引用，内核直接 panic。 */
+			if (unlikely(source_at == NULL))
+				return -1;
 		}
 		if (!literal_decompress(&source_at, &dest_at, lit_length, source_end, dest_end))
 			return -1;
 		/* get match length and decompress */
 		if (unlikely(match_length == mask(match_log2) + REPEAT_MIN)) {
 			source_at = get_size(&match_length, source_at, source_end);
+			if (unlikely(source_at == NULL))
+				return -1;
 		}
 		dest_from = dest_at - offset;
 		if (unlikely(dest_from < dest))
@@ -241,9 +256,19 @@ int lz4k_decompress(
 	unsigned source_max,
 	unsigned dest_max)
 {
+	/* 入口校验：华为原版 lz4k_decode.c:279-284 有这些检查，OPPO 变体
+	 * 全缺。source_max 太小时 source_end - TOKEN_BYTES_MAX 会下溢，
+	 * 让 while_lt_copy_x() 的循环条件假成立；NULL 则直接崩。 */
+	if (unlikely(source == NULL || dest == NULL ||
+		     source_max <= 4 || dest_max == 0))
+		return -1;
+
 	/* preventing compiler optimizations */
 	const BYTE *volatile source_end = (const BYTE*)source + source_max;
 	const BYTE *volatile dest_end = (BYTE*)dest + dest_max;
+	if (unlikely((const BYTE*)source >= source_end ||
+		     (BYTE*)dest >= dest_end))
+		return -1;
 
 	return decompress((const BYTE*)source, (BYTE*)dest, source_end, dest_end,
 			NR_4KB_LOG2, BLOCK_4KB_LOG2);
