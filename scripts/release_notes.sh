@@ -18,8 +18,8 @@
 #
 # 用法: release_notes.sh <tag> <dist 目录> [仓库 root]
 #
-# 注意：本仓库的 zip 文件名不带版本号（zram-lkm-arm64.zip），所以 tag 必须
-# 由调用方传入，不能从产物名推。
+# 注意：zip 文件名带版本号（zram-lkm-<ver>[-<kmi>]-arm64.zip），但版本号只是
+# 名字的一部分，tag 仍必须由调用方传入 —— 清单里也可能同时躺着多个版本。
 set -eu
 
 TAG="${1:?用法: release_notes.sh <tag> <dist> [root]}"
@@ -75,9 +75,10 @@ echo ''
 echo '| File | Android / kernel |'
 echo '|---|---|'
 
-for z in "$DIST"/"$PKG_PREFIX"-*-arm64*.zip; do
+for z in "$DIST"/*.zip; do
     [ -f "$z" ] || continue
     n=$(basename "$z")
+    case "$n" in *android*) ;; *) continue ;; esac
     kmi=$(echo "$n" | grep -oE 'android[0-9]+-[0-9]+\.[0-9]+' | head -1)
     [ -n "$kmi" ] || continue
     and=$(echo "$kmi" | sed -e 's/^android//' -e 's/-.*$//')
@@ -89,8 +90,9 @@ echo ''
 echo '| File | Note |'
 echo '|---|---|'
 
-for z in "$DIST"/"$PKG_PREFIX"-arm64*.zip; do
+for z in "$DIST"/*.zip; do
     [ -f "$z" ] || continue
+    case "$(basename "$z")" in *android*) continue ;; esac
     echo "| \`$(basename "$z")\` | All kernels in one package, picks the right one at boot |"
 done
 

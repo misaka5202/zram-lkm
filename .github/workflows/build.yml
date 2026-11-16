@@ -7,9 +7,12 @@ name: build
 #   lz4k-<kmi>.ko       Huawei LZ4K
 #   lz4kd-<kmi>.ko      Huawei LZ4K delta 变体
 #   lz4k_oplus-<kmi>.ko OPPO 变体
-#   zram-lkm-<kmi>-arm64.zip   单 KMI 模块包
-#   zram-lkm-arm64.zip         全 KMI 合并包，开机按 uname -r 自动选
-#   source-<tag>.tar.gz        源码快照（GPL-2.0 要求）
+#   zram-lkm-<ver>-<kmi>-arm64.zip  单 KMI 模块包
+#   zram-lkm-<ver>-arm64.zip        全 KMI 合并包，开机按 uname -r 自动选
+#   source-<ver>.tar.gz             源码快照（GPL-2.0 要求）
+#
+# <ver> 取自 module/module.prop 的 version=（例如 v0.1.4）。原先不带版本号，
+# 下载下来一堆同名 zip 分不清是哪个版本，也看不出手里的是新是旧。
 #
 # 为什么这些能做成模块而不需要重编内核：
 #   crypto 压缩算法通过 crypto_register_alg() 注册，是开放的算法名空间。
@@ -208,11 +211,14 @@ jobs:
       - name: 生成源码快照 (GPL-2.0 要求)
         run: |
           set -euo pipefail
-          TAG="${{ inputs.version }}"
-          [ -n "$TAG" ] || TAG="v$(date +%Y%m%d-%H%M%S)"
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          # 版本以 module.prop 为准：它同时决定模块页显示和 update.json，
+          # 而从 tag 推断拿不到（tag 推送时 inputs.version 是空的）。
+          VER=$(sed -n 's/^version=//p' module/module.prop | head -1)
+          [ -n "$VER" ] || VER="v$(date +%Y%m%d-%H%M%S)"
+          echo "VER=$VER" >> "$GITHUB_ENV"
+          echo "打包版本: $VER"
           tar --exclude='.git' --exclude='dist' --exclude='ko-all' \
-              -czf "dist/source-$TAG.tar.gz" .
+              -czf "dist/source-$VER.tar.gz" .
 
       - name: 构建 KernelSU 模块
         run: |
@@ -241,7 +247,7 @@ jobs:
           cp dist/*.ko "$STAGE/ko/"
 
           # zip -1：.ko 是 ELF，-9 只能多压 9% 却慢十几倍。
-          ( cd "$STAGE" && zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-arm64.zip" . )
+          ( cd "$STAGE" && zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-$VER-arm64.zip" . )
 
 
           # 按 KMI 拆分
@@ -259,7 +265,7 @@ jobs:
             cp dist/symcheck-*.txt "$S/" 2>/dev/null || true
             chmod 755 "$S"/*.sh
             sed -i 's/\r$//' "$S"/*.sh "$S/module.prop"
-            ( cd "$S" && zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-$kmi-arm64.zip" . )
+            ( cd "$S" && zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-$VER-$kmi-arm64.zip" . )
           done
 
           echo "=== 最终 dist ==="
