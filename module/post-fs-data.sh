@@ -22,6 +22,18 @@ MODDIR=${0%/*}
 LOG="/data/local/tmp/zram_lkm.log"
 CONF="$MODDIR/zram_lkm.conf"
 
+# 文案目录。post-fs-data 阶段 property service 已起来，getprop 可用；
+# 取不到时 i18n.sh 自己退回英文。
+ZR_I18N="$MODDIR/i18n.sh"
+[ -f "$ZR_I18N" ] && . "$ZR_I18N"
+: "${M_MAINLINE_UNKNOWN:=unknown}"
+: "${M_P_KMI_UNKNOWN:=[SKIP] cannot identify KMI, refusing to guess}"
+: "${M_P_SKIP_LOADED:=[SKIP] %s (already loaded)}"
+: "${M_P_AUTOSWITCH:=--- switching algorithm to %s ---}"
+: "${M_P_UNKNOWN_ALGO:=[SKIP] zram0 does not know %s}"
+: "${M_P_SWITCHED:=[OK]   switched to %s}"
+: "${M_P_SWITCH_FAIL:=[FAIL] switching to %s failed}"
+
 : > "$LOG"
 echo "=== zram_lkm $(date) ===" >> "$LOG"
 echo "kernel: $(uname -r)" >> "$LOG"
@@ -67,9 +79,9 @@ detect_kmi() {
 }
 
 KMI=$(detect_kmi)
-echo "kmi: ${KMI:-未识别}" >> "$LOG"
+echo "kmi: ${KMI:-$M_MAINLINE_UNKNOWN}" >> "$LOG"
 if [ -z "$KMI" ]; then
-    echo "[SKIP] 无法识别 KMI，拒绝猜测（会加载错内核版本编的模块）" >> "$LOG"
+    echo "$M_P_KMI_UNKNOWN" >> "$LOG"
 fi
 
 for ko in "$MODDIR"/ko/*.ko; do
@@ -85,7 +97,7 @@ for ko in "$MODDIR"/ko/*.ko; do
     # 已加载就跳过，别记成失败 —— 重跑脚本或手动调用时这很常见
     modname=${name%-android*}
     if grep -q "^${modname} " /proc/modules 2>/dev/null; then
-        echo "[SKIP] $name (已加载)" >> "$LOG"
+        printf "%s\n" "$(printf "$M_P_SKIP_LOADED" "$name")" >> "$LOG"
         continue
     fi
 
@@ -111,9 +123,9 @@ if [ -f "$CONF" ]; then
 fi
 
 if [ "$AUTO_SWITCH" = "1" ] && [ -n "$ALGO" ]; then
-    echo "--- 自动切换算法到 $ALGO ---" >> "$LOG"
+    printf "%s\n" "$(printf "$M_P_AUTOSWITCH" "$ALGO")" >> "$LOG"
     if ! grep -qw "$ALGO" /sys/block/zram0/comp_algorithm 2>/dev/null; then
-        echo "[SKIP] zram0 不认识 $ALGO（模块可能没加载成功）" >> "$LOG"
+        printf "%s\n" "$(printf "$M_P_UNKNOWN_ALGO" "$ALGO")" >> "$LOG"
     else
         # 记录当前 swap 状态和大小，切完恢复
         SWAPSIZE=$(cat /sys/block/zram0/disksize 2>/dev/null)
@@ -122,11 +134,11 @@ if [ "$AUTO_SWITCH" = "1" ] && [ -n "$ALGO" ]; then
 
         [ "$WAS_SWAP" = "1" ] && swapoff /dev/block/zram0 2>/dev/null
         if echo "$ALGO" > /sys/block/zram0/comp_algorithm 2>>"$LOG"; then
-            echo "[OK]   已切到 $ALGO" >> "$LOG"
+            printf "%s\n" "$(printf "$M_P_SWITCHED" "$ALGO")" >> "$LOG"
             [ -n "$SWAPSIZE" ] && echo "$SWAPSIZE" > /sys/block/zram0/disksize 2>/dev/null
             [ "$WAS_SWAP" = "1" ] && { mkswap /dev/block/zram0 >/dev/null 2>&1; swapon /dev/block/zram0 2>/dev/null; }
         else
-            echo "[FAIL] 切换 $ALGO 失败" >> "$LOG"
+            printf "%s\n" "$(printf "$M_P_SWITCH_FAIL" "$ALGO")" >> "$LOG"
         fi
     fi
 fi

@@ -1,5 +1,7 @@
 # How many zram compression types are there?
 
+[中文](ZRAM-ALGORITHMS.zh-CN.md)
+
 The short answer: **as many as the crypto API knows about** — zram has no list
 of its own that it enforces.
 

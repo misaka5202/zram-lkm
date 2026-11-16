@@ -1,139 +1,170 @@
 # Changelog
 
-## 版本号说明
+[中文](CHANGELOG.zh-CN.md)
 
-这个项目**还没有正式版本**。目前所有发布都是 GitHub pre-release（预览版）。
+## About the version numbers
 
-早期版本用的是 `1.0.x`，但那套号看起来像已经稳定，实际只验证到"能编译 +
-单机手动加载"。发布已全部删除，版本重新从 `0.1.0` 开始。
+This project has **no stable release yet**. Everything published so far is a
+GitHub pre-release (preview).
 
-`versionCode` 用日期编码（`v0.1.0` → `20261115`）。老的 `1.0.x` 用的是
-`10001`–`10003` 这种小数字；如果新版本继续用小数字，KernelSU 更新器会认为
-版本更低而不推送。日期编码天然单调递增，不会再因版本重置而倒退。
+Early builds used `1.0.x`, but those numbers looked stable while only
+"compiles and loads by hand on one device" had been verified. All of those
+releases are deleted and numbering restarted at `0.1.0`.
 
-## v0.1.0 — 第一个打过 tag 的预览版
+`versionCode` is date-encoded (`v0.1.0` → `20261115`). The old `1.0.x` line used
+small integers like `10001`–`10003`; continuing with small numbers would let the
+KernelSU updater decide the new build is *older* and never push it. Date
+encoding is monotonic by construction, so a version reset cannot move it
+backwards.
 
-`versionCode` 20261115。
+## v0.1.0 — first tagged preview
 
-模块打包和安装方式重整，算法本身没有变化（仍是 lz4k / lz4kd / lz4k_oplus /
-lz4hc / 842，外加 zram_list）。
+`versionCode` 20261115.
 
-- **`.ko` 不再放进 `system/lib/modules/`**。KernelSU 只有装了 metamodule 时才挂载
-  `system/`，原布局等于给用户加了一个看不见的前提：没装就装完什么都不会发生。
-  现在放在模块自己的 `ko/` 目录，`post-fs-data.sh` 直接从那里 insmod。
-- **CI 与发布解耦**。`ci.yml` 只编译，产物留 artifact；`release.yml` 只在打 tag
-  时运行并强制 `--prerelease`。CI 绿灯不再可能把未验证的产物推给用户。
-- 模块目录按 KernelSU 规范整理：`MODDIR=${0%/*}`、去掉 `set_perm*`、新增
-  `action.sh`。
-- **合并包会加载错 KMI 的模块**。`post-fs-data.sh` 原本是"ko/ 下有什么就
-  insmod 什么"，单 KMI 包没问题，但合并包里有 5 个算法 x 7 个 KMI = 35 个
-  .ko，会挨个去装别的内核版本编的模块。改布局时那步按 KMI 筛选的动作被
-  一起删掉了，现在补回脚本里：内核主版本优先推导 KMI，只加载匹配的那一组。
-- 修 `842` 无法加载：`module_param_named` 写在了被两个编译单元共同 include 的
-  头文件里，生成两份同名 sysfs 参数，模块在加载阶段就 `-EEXIST` 失败（连 init
-  都跑不到）。
-- **`zram_list` 会吃掉列表里的名字**。原地过滤时用 `scnprintf` 写回，而它
-  写完会补一个 `\0`，正好覆盖还没读到的下一个 token 的首字节——实测把
-  `lzo-rle` 变成空串丢掉。改成按字节搬运，最后统一补结尾。
-- 修 `zram_list` 只加自己那五个名字：厂商自带的 `zstdp` 已注册却同样看不见，
-  现在一并补上；反过来厂商 `backends[]` 里的 `zstdn` / `zstdn_o` 根本没注册，
-  现在会被过滤掉，不再误导用户去选一个不存在的算法。
+Module packaging and installation were reworked; the algorithms themselves are
+unchanged (still lz4k / lz4kd / lz4k_oplus / lz4hc / 842, plus zram_list).
 
-## v0.1.3 — 842 解压的两处上游溢出修复
+- **`.ko` files no longer go into `system/lib/modules/`.** KernelSU only mounts
+  `system/` when a metamodule is installed, so that layout silently assumed
+  something the user may not have: without the metamodule, installing the zip
+  did nothing at all. They now live in the module's own `ko/` directory and
+  `post-fs-data.sh` insmods them from there.
+- **CI and release are decoupled.** `ci.yml` only builds and leaves artifacts;
+  `release.yml` runs only on a tag and forces `--prerelease`. A green CI run can
+  no longer push an unverified build to users.
+- Module layout follows the KernelSU convention: `MODDIR=${0%/*}`, no
+  `set_perm*`, and a new `action.sh`.
+- **The combined package loaded modules built for the wrong KMI.**
+  `post-fs-data.sh` used to "insmod whatever is in `ko/`". That is fine for a
+  single-KMI package, but the combined package carries 5 algorithms × 7 KMIs =
+  35 `.ko` files and would try each one, including builds for other kernel
+  versions. The KMI filter was dropped when the layout changed; it is back in
+  the script, deriving the KMI from the kernel major version first and loading
+  only the matching set.
+- Fixed `842` failing to load: `module_param_named` sat in a header included by
+  two translation units, producing two sysfs parameters with the same name, so
+  the module failed with `-EEXIST` before init ever ran.
+- **`zram_list` ate names out of the list.** The in-place filter wrote back with
+  `scnprintf`, which appends a `\0` that lands exactly on the first byte of the
+  next token — observed turning `lzo-rle` into an empty string. It now moves
+  bytes and appends the terminator once at the end.
+- Fixed `zram_list` only adding its own five names: the vendor's `zstdp` is
+  registered but was equally invisible, and is now included. Conversely,
+  `zstdn` / `zstdn_o` in the vendor's `backends[]` are not registered at all,
+  so they are now filtered out instead of inviting users to pick an algorithm
+  that does not exist.
 
-`versionCode` 20261118。**安全修复，建议升级。**
+## v0.1.3 — two upstream 842 decompression overflow fixes
 
-审计 vendored 的 842 编解码器时发现，我们用的 6.1 版本缺两个上游修复，
-而这两个缺陷**恰好落在本模块存在的意义上**——zram 的压缩回写路径。
+`versionCode` 20261118. **Security fix, upgrade recommended.**
 
-**1. index / short-data 输出溢出**（上游 `38ed7182f349`）
+Auditing the vendored 842 codec showed the 6.1 copy is missing two upstream
+fixes, and both defects land **exactly on the reason this module exists** — the
+zram compression write-back path.
+
+**1. index / short-data output overflow** (upstream `38ed7182f349`)
 
 ```c
-if (size > p->olen)      // ← 我们这份没有
+if (size > p->olen)      // absent in our copy
     return -ENOSPC;
 memcpy(p->out, &p->ostart[offset], size);
 p->olen -= size;
 ```
 
-indexed copy 写 2/4/8 字节、short-data 最多写 7 字节，两者都不检查调用方给的
-容量。写穿偏小的目标缓冲区之后，`p->olen` 是**无符号**的，会下溢成一个巨大值，
-于是流里后续所有 `olen` 边界检查全部失效，继续往界外写。上游提交里写明：篡改
-zram backing device 上的压缩数据即可触达，KASAN 内核报
-`vmalloc-out-of-bounds` 于 `__do_index()` / `sw842_decompress()`。
+The indexed copy writes 2/4/8 bytes and short-data writes up to 7, and neither
+checks the caller's capacity. After writing past an undersized destination
+buffer, `p->olen` is **unsigned** and underflows to a huge value, so every later
+`olen` bounds check in the stream is defeated and the overrun continues. The
+upstream commit notes it is reachable by tampering with compressed data on the
+zram backing device; a KASAN kernel reports `vmalloc-out-of-bounds` in
+`__do_index()` / `sw842_decompress()`.
 
-**2. repeat 模板缺少完整历史块**（上游 `deb631649882`）
+**2. repeat template missing a full history block** (upstream `deb631649882`)
 
 ```c
-if (p.out == out)              // 旧：只在完全没输出时拒绝
-if (p.out - p.ostart < 8)      // 新：至少要有完整 8 字节块
+if (p.out == out)              // old: only refuse when nothing was output
+if (p.out - p.ostart < 8)      // new: require at least one full 8-byte block
 ```
 
-repeat 复制前 8 字节输出块。short-data 可以先产出 1~7 字节，紧接一个 repeat
-就会从输出缓冲区**起始位置之前**读，取决于映射可能 fault，或把相邻内核内存读进
-解压结果。
+repeat copies the preceding 8-byte output block. Short-data can produce as few
+as 1–7 bytes, and an immediately following repeat then reads from **before the
+start** of the output buffer — faulting depending on the mapping, or pulling
+adjacent kernel memory into the decompressed result.
 
-两处都已在本地应用并逐行对照上游 master 验证一致。**6.15 及更早的内核都没有
-这个修复**，只有 mainline 有。
+Both are applied locally and verified line by line against upstream master.
+**Kernels 6.15 and earlier do not have these fixes**; only mainline does.
 
-本机 `CONFIG_CRYPTO_USER` 未开启，`AF_ALG` 不可用，非特权进程无法直接喂数据；
-但 zram 回写路径与开着 `AF_ALG` 的设备仍然受影响，所以照修不误。
+`CONFIG_CRYPTO_USER` is off on this device, so `AF_ALG` is unavailable and an
+unprivileged process cannot feed data directly; the zram write-back path and
+devices with `AF_ALG` enabled are still affected, so they are patched anyway.
 
-## v0.1.2 — 新增 zstdn / zstdn_o
+## v0.1.2 — zstdn / zstdn_o added
 
-`versionCode` 20261117。
+`versionCode` 20261117.
 
-这两个名字是 OPPO/一加的自有算法，之前被 `zram_list` 当作"未注册的死条目"过滤掉了。
-一加 15（sm8850）的源码证明它们是真的：`vendor/oplus/kernel/mm/zstd_o/`，
-`crypto_zstd.c` 注册 `zstdn_o`，注释写明 `replace zstdn -> zstdn_o`，而真正区别于
-普通 zstd 的只有一行：
+These two names are OPPO/OnePlus house algorithms that `zram_list` had been
+filtering out as "registered nowhere, dead entries". OnePlus 15 (sm8850) source
+proves they are real: `vendor/oplus/kernel/mm/zstd_o/`, where `crypto_zstd.c`
+registers `zstdn_o`, the comment says `replace zstdn -> zstdn_o`, and the only
+difference from stock zstd is one line:
 
 ```c
 #define ZSTD_DEF_LEVEL	1
 ```
 
-内核自带 zstd 跑 level 3，这个是 level 1 —— 用压缩率换速度，换页设备上正是这个取向。
+Stock zstd runs level 3; this runs level 1 — compression ratio traded for
+speed, which is the right trade on a swap device.
 
-OPPO 把整套 zstd（27 个文件）编进自己的模块，因为他们是树外构建。本项目的做法和
-`lz4hc` 一样：内核已经编进 zstd 编解码器并导出了单遍 API
-（`zstd_get_params` / `zstd_cctx_workspace_bound` / `zstd_init_cctx` /
-`zstd_compress_cctx` 及 dctx 对应物），所以这里只做注册，约 500 行。
+OPPO compiles the whole zstd stack (27 files) into their own module because they
+build out of tree. This project does what it does for `lz4hc`: the kernel
+already has the zstd codec built in and exports the one-shot API
+(`zstd_get_params` / `zstd_cctx_workspace_bound` / `zstd_init_cctx` /
+`zstd_compress_cctx` and the dctx counterparts), so only registration is needed
+here, about 500 lines.
 
-同时注册 `zstdn` 和 `zstdn_o` 两个名字，因为 OPPO 自己的列表（`backends[]` 写
-`zstdn`）和它的注册（模块注册 `zstdn_o`）是错位的，两种固件都可能要其中任意一个。
+Both `zstdn` and `zstdn_o` are registered, because OPPO's own list
+(`backends[]` says `zstdn`) and its registration (the module registers
+`zstdn_o`) disagree, and either firmware may want either name.
 
-实测（32MB 混合样本，本机 android14-6.1）：
+Measured (32 MB mixed sample, this device, android14-6.1):
 
-| 算法 | 压缩率 | 耗时 |
+| Algorithm | Ratio | Time |
 |---|---|---|
 | zstdn | 1.96x | — |
 | zstdn_o | 1.96x | 116ms |
 
-接入后 `comp_algorithm` 变成：
+After loading, `comp_algorithm` becomes:
 
 ```
 lzo lzo-rle lz4 zstd lz4k zstdn zstdn_o [lz4k_oplus] lz4kd lz4hc 842
 ```
 
-厂商原本那两个死条目现在是真算法。
+The vendor's two dead entries are now real algorithms.
 
-## v0.1.1 — zram_list 随包自启
+## v0.1.1 — zram_list ships and autostarts
 
-`versionCode` 20261116。
+`versionCode` 20261116.
 
-之前 `zram_list` 被排除在模块包外，理由是"改写内核文本且未验证"。它已经过反复
-手动验证（只钩一个函数 `zcomp_available_show`，失败时静默放弃），而**不加载它
-就等于模块提供的算法永远不出现在任何读取 `comp_algorithm` 的界面里**——包括
-Scene：它的 APK 里没有任何硬编码压缩算法名，算法列表完全来自
-`/sys/block/zram0/comp_algorithm`。
+`zram_list` had been excluded from the package on the grounds that it "rewrites
+kernel text and is unverified". It has since been verified repeatedly by hand
+(it hooks a single function, `zcomp_available_show`, and gives up silently on
+failure), and **not loading it means the algorithms this module provides never
+appear in any UI that reads `comp_algorithm`** — including Scene, whose APK
+contains no hardcoded compressor names and takes the list entirely from
+`/sys/block/zram0/comp_algorithm`.
 
-所以：
+So:
 
-- `zram_list` 现在随包自启，合并包和单 KMI 包都带
-- 加载时机不再要求"zram 已就绪"：找不到就每 3 秒重试，最多约 1 分钟
-  （模块加载顺序不保证，之前一次性放弃会让开机早期加载失败后永久失效）
+- `zram_list` now ships and autostarts, in both the combined and single-KMI
+  packages
+- Loading no longer requires "zram already up": if it is missing it retries
+  every 3 seconds for about a minute (module load order is not guaranteed, and
+  giving up after one attempt used to mean a permanent failure when loading
+  happened too early at boot)
 
-实测：加载后 `comp_algorithm` 从
+Measured: after loading, `comp_algorithm` goes from
 `lzo lzo-rle lz4 zstd lz4k zstdn zstdn_o [lz4k_oplus]`
-变为
-`lzo lzo-rle lz4 zstd lz4k [lz4k_oplus] lz4kd lz4hc 842`——
-模块提供的算法出现了，厂商列表里没注册的 `zstdn`/`zstdn_o` 被过滤掉。
+to
+`lzo lzo-rle lz4 zstd lz4k [lz4k_oplus] lz4kd lz4hc 842` —
+the module's algorithms appear, and the vendor's unregistered `zstdn`/`zstdn_o`
+are filtered out.

@@ -2,7 +2,7 @@
 
 **Extend ZRAM compression algorithms on a stock Android GKI kernel with loadable modules — no kernel rebuild, no boot image flashing.**
 
-[中文说明](docs/README.zh.md) · [Releases](../../releases/latest)
+[中文说明](README.zh-CN.md) · [Releases](../../releases/latest)
 
 ---
 

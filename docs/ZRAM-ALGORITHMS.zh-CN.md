@@ -1,5 +1,7 @@
 # zram 到底有多少种压缩算法？
 
+[English](ZRAM-ALGORITHMS.md)
+
 一句话：**crypto API 认识多少个，就有多少个** —— zram 自己没有强制名单。
 
 ## 为什么没有固定数字
