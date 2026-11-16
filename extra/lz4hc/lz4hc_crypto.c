@@ -35,11 +35,13 @@
 
 /* 运行时符号解析：vendor 内核可能没导出下面这些辅助函数 */
 #include "../compat/zram_symres.h"
+/* 指针类型由 BTF 生成，不手写签名 —— 见 scripts/gen_symproto.py */
+#include "../compat/zram_symproto.h"
 
-static int (*zr_register_scomp)(struct scomp_alg *);
-static void (*zr_unregister_scomp)(struct scomp_alg *);
-static int (*zr_LZ4_compress_HC)(const char *, char *, int, int, int, void *);
-static int (*zr_LZ4_decompress_safe)(const char *, char *, int, int);
+static zr_t_crypto_register_scomp zr_register_scomp;
+static zr_t_crypto_unregister_scomp zr_unregister_scomp;
+static zr_t_LZ4_compress_HC zr_LZ4_compress_HC;
+static zr_t_LZ4_decompress_safe zr_LZ4_decompress_safe;
 
 /*
  * 四个符号在部分 vendor 内核上存在但未导出（Qualcomm SM7675 / 6.1.138 实测）。
