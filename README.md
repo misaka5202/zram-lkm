@@ -186,6 +186,45 @@ already declares those ten functions and `typeof` cannot drift from a
 declaration; the generated header covers only the symbols whose headers are not
 included.
 
+## What loading costs
+
+Even though a module's codec runs at the same speed as the kernel's own, a
+module is not free. Two costs are paid once, inside `post-fs-data`:
+
+| | measured |
+|---|---|
+| `insmod`, per module | 60–110 ms |
+| resident memory, per module | 20–24 KB `coresize` (~55 KB of `MemFree`) |
+| all seven loaded | ~780 ms, ~150 KB `coresize` / ~400 KB `MemFree` |
+
+That is boot latency rather than runtime cost — but `post-fs-data` blocks boot,
+so it counts. **The loader now checks first and loads only what the kernel
+lacks**: if an algorithm already appears in `zram0/comp_algorithm`, its module
+is skipped with a `[SKIP]` line naming the reason.
+
+The same work exposed where the script was spending its time. During early boot
+this device charges about 40 ms per external command:
+
+| operation | cost |
+|---|---|
+| reading `/proc/crypto` | 70 ms |
+| reading `zram0/comp_algorithm` | 63 ms |
+| `getprop <one property>` | 55 ms |
+| `printf` (an external binary on Android, not a builtin) | 40 ms |
+
+The old script formatted every log line as `printf "%s\n" "$(printf …)"` — three
+forks per line — and looked up three properties separately. Replacing those with
+builtins (`case`, parameter expansion, one `getprop` dump) and reading the two
+`/proc` entries once each gave:
+
+| | before | after |
+|---|---|---|
+| kernel already has the algorithms | 1013 ms, 7 modules | **701 ms, 2 modules** |
+| kernel lacks them (module needed) | 1013 ms, 7 modules | **906 ms, 7 modules** |
+
+Median of three warm runs each on the same device. The second row still loads
+everything; it gained only the shell-side savings, which is why it moved less.
+
 ## Install
 
 Download `zram-lkm-arm64.zip` (all KMIs) or `zram-lkm-<kmi>-arm64.zip` (single
