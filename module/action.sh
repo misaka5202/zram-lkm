@@ -56,5 +56,56 @@ echo "    echo lz4k_oplus > /sys/block/zram0/comp_algorithm"
 echo "$M_A_HINT_ZRAMLIST"
 echo
 
+echo "$M_SEC_EXPORT"
+# 构建期把每个 .ko 的未定义符号导成 ko/symcheck-<kmi>.txt。
+# 这里拿清单查 /proc/kallsyms 的 __ksymtab_ 条目 —— 直接报出本内核缺哪些，
+# 不依赖能读 dmesg（有些厂商内核上读不到，用户只看到笼统的 unknown symbol）。
+_krel=$(uname -r)
+_kandroid=$(echo "$_krel" | grep -oE 'android[0-9]+' | head -1)
+_kmajor=$(echo "$_krel" | grep -oE '^[0-9]+[.][0-9]+' | head -1)
+_kmi=""
+[ -n "$_kandroid" ] && [ -n "$_kmajor" ] && _kmi="${_kandroid}-${_kmajor}"
+# 兜底：post-fs-data.sh 开机时已把推导结果写进日志
+if [ -z "$_kmi" ] && [ -f "$LOG" ]; then
+    _kmi=$(grep -a 'kmi:' "$LOG" 2>/dev/null | tail -1 | sed 's/.*kmi:[[:space:]]*//' | tr -d ' \r')
+    case "$_kmi" in android*) ;; *) _kmi="" ;; esac
+fi
+_sf="$MODDIR/ko/symcheck-${_kmi}.txt"
+if [ -z "$_kmi" ]; then
+    echo "  [--]   $M_EXPORT_NONE"
+elif [ ! -f "$_sf" ]; then
+    echo "  [--]   $(printf "$M_EXPORT_NOFILE" "$_kmi")"
+else
+    # /proc/kallsyms 只读一次：先抽一份导出符号名单（__ksymtab_ 后面的名字），
+    # 再用 awk 单趟比对。逐符号 grep 在二十多万行的 kallsyms 上会卡死。
+    _have=$(mktemp)
+    grep -a '__ksymtab_' /proc/kallsyms 2>/dev/null \
+        | sed 's/.*__ksymtab_//' | sort -u > "$_have"
+
+    # 清单格式：每行一个符号；"# <模块名>" 是分组标记，不参与比对。
+    # 计数和显示必须用同一个条件，否则会出现「报 0 个缺失却列出好几条」。
+    _miss=$(awk '
+        FNR == NR { have[$1] = 1; next }
+        /^#/ { next }
+        NF >= 1 && !($1 in have) { n++ }
+        END { print n + 0 }
+    ' "$_have" "$_sf" 2>/dev/null)
+    _miss=${_miss:-0}
+
+    if [ "$_miss" -eq 0 ]; then
+        echo "  [OK]   $M_EXPORT_ALL_OK"
+    else
+        awk -v fmt="$M_EXPORT_MISS_ONE" '
+            FNR == NR { have[$1] = 1; next }
+            /^#/ { next }
+            NF >= 1 && !($1 in have) { printf "  [SYM]  "; printf fmt "\n", $1, $1 }
+        ' "$_have" "$_sf" 2>/dev/null
+        echo "         $(printf "$M_EXPORT_MISS_HEAD" "$_miss")"
+        echo "         $M_EXPORT_MISS_TAIL"
+    fi
+    rm -f "$_have"
+fi
+echo
+
 echo "$M_A_LOG"
 tail -20 "$LOG" 2>/dev/null || echo "$M_A_NO_LOG"

@@ -79,6 +79,15 @@ M_A_HINT_ZRAMLIST="  zram_list only prettifies the list display; it does not aff
 M_A_LOG="=== Log (last 20 lines) ==="
 M_A_NO_LOG="(no log)"
 
+# --- kernel export check ---
+M_SEC_EXPORT="Kernel export check"
+M_EXPORT_NONE="cannot identify the running KMI, skipping"
+M_EXPORT_NOFILE="no symbol list for %s (built without nm?); skipping"
+M_EXPORT_ALL_OK="every symbol this package needs is exported by this kernel"
+M_EXPORT_MISS_ONE="%s is NOT exported by this kernel"
+M_EXPORT_MISS_HEAD="%s symbol(s) missing in total. This is a vendor export-table"
+M_EXPORT_MISS_TAIL="difference, not a corrupt package -- paste this into an issue."
+
 # --- post-fs-data.sh (log only) ---
 M_P_KMI_UNKNOWN="[SKIP] cannot identify KMI, refusing to guess (would load modules built for another kernel version)"
 M_P_SKIP_LOADED="[SKIP] %s (already loaded)"
@@ -131,6 +140,14 @@ zh)
     M_A_HINT_ZRAMLIST="  zram_list 只美化列表显示，不影响实际可用性。"
     M_A_LOG="=== 日志（末尾 20 行）==="
     M_A_NO_LOG="(无日志)"
+
+    M_SEC_EXPORT="内核导出检查"
+    M_EXPORT_NONE="无法识别当前 KMI，跳过"
+    M_EXPORT_NOFILE="没有 %s 的符号清单（打包时缺 nm？），跳过"
+    M_EXPORT_ALL_OK="本包需要的符号在这台内核上全部导出"
+    M_EXPORT_MISS_ONE="%s 本内核未导出"
+    M_EXPORT_MISS_HEAD="共 %s 个符号缺失。这是厂商内核导出表差异，"
+    M_EXPORT_MISS_TAIL="不是包损坏 —— 报 issue 时请把这整段贴上去。"
 
     M_P_KMI_UNKNOWN="[SKIP] 无法识别 KMI，拒绝猜测（会加载错内核版本编的模块）"
     M_P_SKIP_LOADED="[SKIP] %s (已加载)"

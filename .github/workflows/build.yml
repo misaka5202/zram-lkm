@@ -230,6 +230,7 @@ jobs:
              module/service.sh module/uninstall.sh module/action.sh \
              module/i18n.sh "$STAGE/"
           cp scripts/zram-bench.sh "$STAGE/"
+          cp ko-all/symcheck-*.txt "$STAGE/" 2>/dev/null || true
           chmod 755 "$STAGE"/*.sh
           sed -i 's/\r$//' "$STAGE"/*.sh "$STAGE/module.prop"
 
@@ -255,6 +256,7 @@ jobs:
                module/service.sh module/uninstall.sh module/action.sh \
                module/i18n.sh "$S/"
             cp scripts/zram-bench.sh "$S/"
+            cp dist/symcheck-*.txt "$S/" 2>/dev/null || true
             chmod 755 "$S"/*.sh
             sed -i 's/\r$//' "$S"/*.sh "$S/module.prop"
             ( cd "$S" && zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-$kmi-arm64.zip" . )
