@@ -1,4 +1,4 @@
-name: 问题反馈 / Bug report
+name: 问题反馈（中文）
 description: 算法加载不了、列表里看不到、切换失败等
 title: "[Bug] "
 labels: ["bug"]
@@ -85,15 +85,37 @@ body:
       required: false
 
   - type: textarea
-    id: dmesg
+    id: bootlog
     attributes:
-      label: 内核日志
+      label: 开机日志文件 / Boot logs
       description: |
-        `dmesg | grep -iE 'lz4k|lz4hc|842|zram|crypto' | tail -50`
-        开机卡住的另附 `/sys/fs/pstore/console-ramoops-0` 的崩溃段落。
-      render: shell
+        开机类问题没有这几份日志基本无法定位。请**作为文件附件**传上来，不要只
+        截图；日志很大时也只能传文件。
+        Without these, boot problems usually cannot be diagnosed. Attach them
+        **as files**, not screenshots.
+
+        1. 本次开机的内核日志 / this boot's kernel log
+           su -c dmesg > /sdcard/dmesg.txt
+
+        2. 模块自己的日志 / the module's own log
+           su -c 'cat /data/local/tmp/zram_lkm.log' > /sdcard/zram_lkm.log
+
+        3. 开机卡住、重启、进安全模式时，要上一轮开机的日志 / for hangs,
+           reboots or safe mode, the *previous* boot's log
+           su -c 'cat /sys/fs/pstore/console-ramoops-0' > /sdcard/pstore.txt
+           老内核用 /proc/last_kmsg / older kernels: /proc/last_kmsg
+
+        顺手带上这两条更好 / also useful:
+           su -c 'cat /proc/crypto' > /sdcard/crypto.txt
+           su -c lsmod > /sdcard/lsmod.txt
+
+        拿不到 root 就写「无 root，无法抓取」并描述现象。
+        No root? Write "no root, cannot capture" and describe what you saw.
+      placeholder: |
+        上传上面那几个 .txt，或直接粘贴 dmesg / zram_lkm.log / pstore 的关键段落。
+        Upload the .txt files, or paste the relevant parts here.
     validations:
-      required: false
+      required: true
 
   - type: textarea
     id: steps

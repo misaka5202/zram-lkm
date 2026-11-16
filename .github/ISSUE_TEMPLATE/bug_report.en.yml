@@ -1,0 +1,140 @@
+name: Bug report (English)
+description: An algorithm will not load, does not show up, or switching fails
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One misunderstanding first:
+
+        **An algorithm missing from `comp_algorithm` does not mean it failed to
+        load.** That file prints zram's compile-time `backends[]` array; an
+        algorithm added by a module works but does not appear there by itself.
+        Judge availability by `/proc/crypto` and by actually switching to it
+        (the form below asks for both).
+
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS
+      placeholder: "e.g. OPPO Find X7 (PHZ110), Android 14, ColorOS 15"
+    validations:
+      required: true
+
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel version
+      description: Full output of `uname -r`, not just "6.1"
+      placeholder: "e.g. 6.1.157-android14-11-o-g2d576b643492"
+    validations:
+      required: true
+
+  - type: input
+    id: module_version
+    attributes:
+      label: Module version
+      placeholder: "e.g. v0.1.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: Symptom
+      multiple: true
+      options:
+        - Module will not install / is not listed by the manager
+        - Installs but the .ko never loads (absent from lsmod)
+        - insmod reports an error
+        - Algorithm absent from /proc/crypto
+        - Algorithm missing from comp_algorithm (may be a display issue only)
+        - Switching the algorithm fails
+        - Boot hangs / reboots / drops to safe mode
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: action_output
+    attributes:
+      label: Action button output
+      description: Full output after pressing the Action button on the KernelSU module page; it covers most of what is needed
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: cryptolist
+    attributes:
+      label: Registered compression algorithms
+      description: |
+        `awk '/^name/ {n=$3} /^type/ {if ($3=="compression") print n}' /proc/crypto | sort -u`
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: loadlog
+    attributes:
+      label: Load log
+      description: |
+        `cat /data/local/tmp/zram_lkm.log`
+        If you insmodded by hand, paste that command's full output too,
+        together with the matching lines from dmesg.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: bootlog
+    attributes:
+      label: Boot logs / 开机日志文件
+      description: |
+        Without these, boot problems usually cannot be diagnosed. Attach them
+        **as files**, not screenshots.
+        开机类问题没有这几份日志基本无法定位。请**作为文件附件**传上来，不要只
+        截图；日志很大时也只能传文件。
+
+        1. this boot's kernel log / 本次开机的内核日志
+           su -c dmesg > /sdcard/dmesg.txt
+
+        2. the module's own log / 模块自己的日志
+           su -c 'cat /data/local/tmp/zram_lkm.log' > /sdcard/zram_lkm.log
+
+        3. for hangs, reboots or safe mode, the *previous* boot's log /
+           开机卡住、重启、进安全模式时，要上一轮开机的日志
+           su -c 'cat /sys/fs/pstore/console-ramoops-0' > /sdcard/pstore.txt
+           older kernels / 老内核: /proc/last_kmsg
+
+        Also useful / 顺手带上这两条更好:
+           su -c 'cat /proc/crypto' > /sdcard/crypto.txt
+           su -c lsmod > /sdcard/lsmod.txt
+
+        No root? Write "no root, cannot capture" and describe what you saw.
+        拿不到 root 就写「无 root，无法抓取」并描述现象。
+      placeholder: |
+        Upload the .txt files, or paste the relevant parts here.
+        上传上面那几个 .txt，或直接粘贴 dmesg / zram_lkm.log / pstore 的关键段落。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: Retested on the latest version
+          required: true
+        - label: Confirmed the major.minor in `uname -r` (e.g. 6.1) matches the KMI of the module being loaded
+          required: true
+        - label: Understand that comp_algorithm is display only; availability is judged by /proc/crypto and an actual switch
+          required: true
