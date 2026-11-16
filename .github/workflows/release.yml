@@ -64,16 +64,16 @@ jobs:
           else
             TAG="${GITHUB_REF_NAME}"
           fi
-          if [ -f docs/RELEASE-NOTES.md ]; then
-            cp docs/RELEASE-NOTES.md notes.md
-          else
-            printf 'ZRAM LKM %s (preview)\n\n' "$TAG" > notes.md
-          fi
+          # 正文由 scripts/release_notes.sh 生成，格式对齐 KernelSU 的 release：
+          #   vX.Y.Z / ## What's Changed / ## Supported kernels / Full Changelog
+          # 不再读 docs/RELEASE-NOTES.md —— 那份手工维护的会和 CHANGELOG 走偏
+          # （v0.1.4 的正文和 CHANGELOG 就有两套说法）。
+          sh scripts/release_notes.sh "$TAG" dist . > notes.md
           cat notes.md
 
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --title "ZRAM LKM $TAG (preview)" \
+            --title "$TAG" \
             --prerelease \
             --notes-file notes.md \
             dist/*.ko dist/*.zip dist/source-*.tar.gz
