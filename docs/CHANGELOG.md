@@ -17,7 +17,14 @@ KernelSU updater decide the new build is *older* and never push it. Date
 encoding is monotonic by construction, so a version reset cannot move it
 backwards.
 
-## Unreleased — the symbol layer
+## v0.1.4 — the symbol layer, closed out
+
+`versionCode` 20261119.
+
+This release is about symbols, and about what loading a module actually
+costs. Runtime is measured to be equal to a kernel that has the codecs
+built in; the cost that does exist is boot time and memory, and both are
+now smaller.
 
 All of this comes from one situation: a vendor kernel can leave a function in
 `kallsyms` and still not export it, so a module that references it statically

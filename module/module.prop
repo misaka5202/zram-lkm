@@ -1,7 +1,7 @@
 id=zram_lkm
 name=ZRAM LKM
-version=v0.1.3
-versionCode=20261118
+version=v0.1.4
+versionCode=20261119
 author=misaka5202
 description=Extra ZRAM compressors for stock GKI kernels: lz4k, lz4kd, lz4k_oplus, lz4hc, 842, zstdn, zstdn_o, plus zram_list so module-provided algorithms show up in comp_algorithm. Loaded by KMI at boot.
 updateJson=https://raw.githubusercontent.com/misaka5202/zram-lkm/main/update.json
