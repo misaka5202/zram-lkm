@@ -90,35 +90,70 @@ body:
   - type: textarea
     id: bootlog
     attributes:
-      label: Boot logs / 开机日志文件
+      label: Boot logs
       description: |
         Without these, boot problems usually cannot be diagnosed. Attach them
         **as files**, not screenshots.
-        开机类问题没有这几份日志基本无法定位。请**作为文件附件**传上来，不要只
-        截图；日志很大时也只能传文件。
 
-        1. this boot's kernel log / 本次开机的内核日志
+        1. This boot's kernel log
            su -c dmesg > /sdcard/dmesg.txt
 
-        2. the module's own log / 模块自己的日志
+        2. The module's own log
            su -c 'cat /data/local/tmp/zram_lkm.log' > /sdcard/zram_lkm.log
 
-        3. for hangs, reboots or safe mode, the *previous* boot's log /
-           开机卡住、重启、进安全模式时，要上一轮开机的日志
+        3. For hangs, reboots or safe mode: the *previous* boot's log
            su -c 'cat /sys/fs/pstore/console-ramoops-0' > /sdcard/pstore.txt
-           older kernels / 老内核: /proc/last_kmsg
+           older kernels: /proc/last_kmsg
 
-        Also useful / 顺手带上这两条更好:
+        Also useful:
            su -c 'cat /proc/crypto' > /sdcard/crypto.txt
            su -c lsmod > /sdcard/lsmod.txt
 
         No root? Write "no root, cannot capture" and describe what you saw.
-        拿不到 root 就写「无 root，无法抓取」并描述现象。
       placeholder: |
         Upload the .txt files, or paste the relevant parts here.
-        上传上面那几个 .txt，或直接粘贴 dmesg / zram_lkm.log / pstore 的关键段落。
     validations:
       required: true
+
+  - type: textarea
+    id: bootimg
+    attributes:
+      label: Boot image (strongly recommended for load failures)
+      description: |
+        Every vendor trims a different set of EXPORT_SYMBOLs. The zram/crypto
+        helpers are among the ones vendors cut most often. A log tells us what
+        is *missing*; only the boot image tells us what this kernel actually
+        *exports*. With it I can check every module against your kernel
+        **before** you flash anything -- no more round-trips of
+        "flash -> fails -> send log".
+
+        How to get it (pick one):
+
+        1. From the official firmware package (no root needed)
+           Unpack the full OTA for your exact model. boot.img or
+           init_boot.img is usually inside.
+
+        2. dd from the device (root required)
+           su -c 'ls -l /dev/block/by-name/boot*'
+           su -c 'dd if=/dev/block/by-name/boot_a of=/sdcard/boot.img'
+           On A/B devices try boot_a and boot_b -- whichever reads.
+
+        3. From payload.bin via payload_dumper
+           https://github.com/vm03/payload_dumper
+
+        Privacy: boot.img contains the kernel and ramdisk only -- no personal
+        data, accounts or apps.
+
+        Not comfortable sharing it? Run this instead and paste the output.
+        The result is identical:
+
+           su -c "grep -a '__ksymtab_' /proc/kallsyms | sed 's/.*__ksymtab_//' | sort -u" > exports.txt
+      placeholder: |
+        Attach boot.img as a file, or paste the exports.txt content here
+        (about 20k symbol names), or write "cannot obtain" if neither is
+        possible.
+    validations:
+      required: false
 
   - type: textarea
     id: steps
