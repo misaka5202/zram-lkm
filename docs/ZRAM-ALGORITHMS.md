@@ -86,6 +86,29 @@ resulting `.ko` is a couple hundred kilobytes instead of megabytes.
 That is the same situation user namespaces were in: the implementation is
 already in the kernel, and only the glue that publishes it was compiled out.
 
+## When the kernel already ships it
+
+Some kernels build all of these in, which means two implementations of the same
+name live side by side and the crypto core picks one by `cra_priority`:
+
+- `lz4k`, `lz4kd`, `lz4k_oplus`, `lz4hc` — both at priority 0, so the newer
+  registration wins and the module's copy is the one used after `insmod`. Same
+  codec either way.
+- `842` — some vendor kernels register it at **priority 100**. The module's copy
+  (priority 0) is then never selected: it loads, registers, and does nothing.
+  Check with `grep -A3 'name *: 842' /proc/crypto` and look at the priorities.
+- `zstdn` / `zstdn_o` are OPPO-specific and normally absent, so there the module
+  is the only source.
+
+The README carries a measured comparison between a built-in implementation and
+the module's on the same device: they do not differ beyond run-to-run noise.
+
+One measurement caveat if you repeat it yourself: the first sample after
+`insmod` is always slow, because the module's text is freshly mapped and cold.
+Warm up once and throw that sample away, or you will attribute about 5% to the
+module that is not there. Alternating the two configurations does not help —
+the cold sample follows every `insmod`.
+
 ## Checking a device
 
 ```sh

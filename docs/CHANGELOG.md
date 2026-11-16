@@ -73,6 +73,41 @@ separately), so a module that cannot load never takes the others with it:
 `post-fs-data.sh` records `[FAIL]` for that file and moves on. Measured on the
 device above, three of seven failed and four still worked. Nothing to change.
 
+### Measured against a kernel that has everything built in
+
+A custom `6.1.138` build with every algorithm compiled in makes a real A/B
+possible: the same codec exists twice on one device, once called directly from
+kernel text and once reached through the resolved pointers. Alternating
+measurements, one warmup sample discarded, 9–13 samples per configuration:
+
+| Algorithm | built in | from the module |
+|---|---|---|
+| `lz4hc` | 574 ms | 568 ms |
+| `lz4k` | 207 ms | 215 ms |
+| `lz4kd` | 206 ms | 200 ms |
+| `lz4k_oplus` | 233 ms | 236 ms |
+| `lzo` / `zstd` / `842` (controls) | — | within ±1.5% |
+
+The control rows cannot differ — both configurations run kernel code — and they
+bound the noise floor at ±1.5%. The experimental rows sit inside it with the
+sign flipping between algorithms, so there is no difference to report.
+Compressed size is byte-identical either way, confirming both really run the
+same codec.
+
+Two findings came out of it that are not about speed:
+
+- **Our `842` module is inert on such a kernel.** The vendor registers its
+  built-in `842` at `cra_priority = 100`; ours defaults to 0 and never gets
+  selected. Verified by holding a zram device on `842` and watching the module's
+  reference count stay at 0 while `rmmod` succeeded. Harmless, but worth knowing
+  before anyone expects it to take over. On a kernel without a built-in `842` it
+  is the only source.
+- **The first attempt was wrong.** It reported `lz4hc` 5% slower from the module,
+  reproducibly across three passes. The cause was the first sample after
+  `insmod` being cold — fresh module text, empty i-cache and branch predictor.
+  Discarding one warmup sample erased the gap. Alternating the configurations
+  does not help: the cold sample follows every `insmod`.
+
 ### Measured numbers, and translations that are actually complete
 
 The README's algorithm section used to say "measure it yourself" and stop

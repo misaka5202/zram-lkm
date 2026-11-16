@@ -101,8 +101,62 @@ not move with the number of symbols: `lz4k` (0 symbols), `lz4hc` (4) and
 `zstdn` (12) all land in the same 50–90 ms band, which is the module loader
 itself. At run time the only difference is one more indirect branch per codec
 call, and only on `lz4hc` and `zstdn` — `842` carries its codec, so its hot
-path has none. That is nanoseconds against tens of microseconds per page,
-i.e. below the run-to-run noise of any measurement you can make on the device.
+path has none.
+
+### Measured against a kernel that has them built in
+
+"One more indirect branch per call" is an argument. Here is the measurement,
+made possible by flashing a kernel that builds all of these in, so the same
+algorithm exists twice on the same device: once as kernel text called directly,
+once as a module reached through the resolved pointers.
+
+`Redmi Pad 2410CRP4CG` / `SM7675` / `6.1.138-android14-11-g5929004f86ffc-…-4k`.
+60 MB of real `.so` files, fresh zram device per sample, median of 9–13 samples,
+native and module measurements alternating so drift cancels:
+
+| Algorithm | built into the kernel | from the module | difference |
+|---|---|---|---|
+| `lz4hc` | 574 ms | 568 ms | −1.0% |
+| `lz4k` | 207 ms | 215 ms | +3.9% |
+| `lz4kd` | 206 ms | 200 ms | −2.9% |
+| `lz4k_oplus` | 233 ms | 236 ms | +1.3% |
+| `lzo` — control, both rows are kernel code | 228 ms | 229 ms | +0.4% |
+| `zstd` — control | 533 ms | 525 ms | −1.5% |
+| `842` — control, the module's copy is never selected | 839 ms | 841 ms | +0.2% |
+
+The three control rows cannot differ, and they bound the noise floor at ±1.5%.
+Per-sample spread is 3–10%, so a 4% move in a median of nine samples is not a
+signal; across the four algorithms the sign flips, which is what "no difference"
+looks like. Compressed size is byte-identical in both configurations
+(lz4hc: 38,095,631 either way), so both really are running the same codec.
+
+**Measurement note, because it cost me an hour.** The first attempt reported
+`lz4hc` 5% slower from the module, reproducibly, across three passes. It was
+wrong: the first sample after `insmod` is always slow, because the module's text
+is freshly mapped and its i-cache and branch-predictor state are cold. Warming
+up once and discarding that sample removed the gap entirely. Alternating the two
+configurations does *not* fix this — the cold sample travels with each `insmod`.
+
+### If your kernel already ships these algorithms
+
+The module registers the same algorithm names the kernel does, so which
+implementation `zram` gets depends on `cra_priority`:
+
+| Algorithm | Priority | Who wins |
+|---|---|---|
+| `lz4k` `lz4kd` `lz4k_oplus` `lz4hc` | kernel 0, module 0 | the newer registration — the module, once `insmod`'d. Same codec either way |
+| `842` | **kernel 100**, module 0 | always the kernel. The module loads, registers, and is never selected |
+| `zstdn` `zstdn_o` | OPPO-specific, usually absent | the module is the only source |
+
+The `842` case is real: verified on the kernel above by holding a zram device on
+`842` and watching the module's reference count stay at 0 while `rmmod` succeeded.
+It is harmless — the module just sits there — but if you installed it expecting
+it to take over, it will not. Raising the module's `cra_priority` above the
+kernel's would flip that; it buys nothing, since both run the same `lib/842`.
+
+The practical read: on a kernel that builds all ten algorithms in, the module
+adds only `zstdn` / `zstdn_o`. Everything else is a duplicate that is neither
+faster nor slower.
 
 **What it needs.** `CONFIG_KALLSYMS_ALL`. If the function is absent from the
 kernel entirely, nothing can help; the module then fails at init and names the
@@ -186,7 +240,8 @@ There is no universal winner; it depends on the workload.
 | Latency-sensitive (games, foreground UI) | `lzo-rle` (built in, fastest) |
 | Middle ground | `lz4k` / `lz4k_oplus` |
 
-Measured on one device (`Redmi Pad 2410CRP4CG`, `SM7675`, kernel `6.1.138`):
+Measured on one device (`Redmi Pad 2410CRP4CG`, `SM7675`, vendor kernel
+`6.1.138-android14-11-g0c3d559bcd85`):
 60 MB of real `.so` files written to a scratch zram device.
 
 | Algorithm | Write | Read | Compressed (of 63.11 MB) |
