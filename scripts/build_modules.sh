@@ -40,6 +40,8 @@ clean_src() {
 
 # ---------------------------------------------------------------- 算法模块 ---
 # 目录名 == 模块名，Makefile 里 obj-m 已按此命名
+: > "$OUT/symcheck-$KMI.txt"
+
 for m in lz4k lz4kd lz4k_oplus lz4hc 842 zstdn zram_list; do
     SRC="$WS/extra/$m"
     [ -f "$SRC/Makefile" ] || { warn "$m @ $KMI (无 Makefile)"; continue; }
@@ -48,6 +50,17 @@ for m in lz4k lz4kd lz4k_oplus lz4hc 842 zstdn zram_list; do
     if make -C "$KDIR" M="$SRC" "${EXTRA_MAKE_ARGS[@]}" modules -j"$NPROC"; then
         if [ -f "$SRC/$m.ko" ]; then
             cp "$SRC/$m.ko" "$OUT/$m-$KMI.ko"
+            # 未定义符号清单。装到设备后 action.sh 拿它比对
+            # /proc/kallsyms 的 __ksymtab_ 条目，直接报出本内核缺哪些。
+            # 不做这一步的话，厂商裁了导出表时用户只看到笼统的
+            # unknown symbol，报 issue 也说不出缺什么。
+            if command -v nm >/dev/null 2>&1; then
+                {
+                    printf '# %s\n' "$m"
+                    nm -u "$SRC/$m.ko" 2>/dev/null \
+                        | awk 'NF >= 2 { print $2 }' | sort -u
+                } >> "$OUT/symcheck-$KMI.txt"
+            fi
             log "  [OK] $m-$KMI.ko"
         else
             warn "$m @ $KMI (无产物)"
