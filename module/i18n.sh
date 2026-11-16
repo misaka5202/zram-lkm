@@ -16,8 +16,13 @@
 # 只在 [5.10, 6.19) 的内核上会被用到；其他情况调用方自己决定是否 source。
 
 _i18n_locale() {
+    # 一次 getprop 全量 ≈100 ms，而单查一个属性要 ≈55 ms；post-fs-data 阶段
+    # property service 正忙，三个属性分开查就是 165 ms 的纯等待。取全量再
+    # 自己解析，省掉三分之二。
+    local _dump _p _v
+    _dump=$(getprop 2>/dev/null)
     for _p in persist.sys.locale ro.product.locale ro.product.locale.language; do
-        _v=$(getprop "$_p" 2>/dev/null)
+        _v=$(echo "$_dump" | sed -n "s/^\[$_p\]: \[\(.*\)\]\$/\1/p" | head -1)
         [ -n "$_v" ] && { echo "$_v"; return; }
     done
     echo en
@@ -95,6 +100,8 @@ M_P_AUTOSWITCH="--- switching algorithm to %s ---"
 M_P_UNKNOWN_ALGO="[SKIP] zram0 does not know %s (the module probably did not load)"
 M_P_SWITCHED="[OK]   switched to %s"
 M_P_SWITCH_FAIL="[FAIL] switching to %s failed"
+M_P_SKIP_BUILTIN="[SKIP] %s (the kernel already provides it)"
+M_P_SKIP_LIST="[SKIP] %s (no module-provided algorithm to expose)"
 
 # --- uninstall.sh ---
 M_U_NOTE="Module removed. Rebooting is cleaner: the algorithms stay registered"
@@ -155,6 +162,8 @@ zh)
     M_P_UNKNOWN_ALGO="[SKIP] zram0 不认识 %s（模块可能没加载成功）"
     M_P_SWITCHED="[OK]   已切到 %s"
     M_P_SWITCH_FAIL="[FAIL] 切换 %s 失败"
+    M_P_SKIP_BUILTIN="[SKIP] %s（内核已经提供该算法，不必再装模块）"
+    M_P_SKIP_LIST="[SKIP] %s（没有需要额外列出的算法）"
 
     M_U_NOTE="模块已移除。建议重启：.ko 文件删掉后算法仍会保持注册，"
     M_U_NOTE2="直到下次重启。"
@@ -214,6 +223,8 @@ ja)
     M_P_UNKNOWN_ALGO="[SKIP] zram0 は %s を知りません（モジュールの読み込みに失敗した可能性）"
     M_P_SWITCHED="[OK]   %s に切り替えました"
     M_P_SWITCH_FAIL="[FAIL] %s への切り替えに失敗"
+    M_P_SKIP_BUILTIN="[SKIP] %s（カーネルが既に提供しています）"
+    M_P_SKIP_LIST="[SKIP] %s（追加で表示すべきアルゴリズムがありません）"
 
     # uninstall.sh
     M_U_NOTE="モジュールを削除しました。再起動を推奨します: .ko を消してもアルゴリズムは"

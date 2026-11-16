@@ -73,6 +73,35 @@ separately), so a module that cannot load never takes the others with it:
 `post-fs-data.sh` records `[FAIL]` for that file and moves on. Measured on the
 device above, three of seven failed and four still worked. Nothing to change.
 
+### Loading only what the kernel lacks
+
+A module's codec costs nothing extra at run time, but loading it is not free:
+`insmod` takes 60–110 ms per module here, and each one keeps 20–24 KB resident.
+Seven modules meant ~780 ms of blocked boot and ~400 KB of `MemFree` — paid even
+on kernels that already build every algorithm in, where the module then never
+gets selected at all.
+
+`post-fs-data.sh` now reads `zram0/comp_algorithm` once and skips any module
+whose algorithm is already there, logging `[SKIP] … (the kernel already
+provides it)`. `zram_list` loads last and only when something was actually
+loaded, since its whole job is exposing module-provided algorithms.
+
+The same investigation found the script spending its time on process
+creation: on this device an external command costs ~40 ms during early boot,
+`printf` is an external binary on Android, and every log line ran it twice
+through a command substitution. The `/proc/crypto` read (70 ms) and three
+separate `getprop` calls (55 ms each) were the other half of it.
+
+| | before | after |
+|---|---|---|
+| kernel already has the algorithms | 1013 ms, 7 modules | 701 ms, 2 modules |
+| kernel lacks them | 1013 ms, 7 modules | 906 ms, 7 modules |
+
+Median of three warm runs each. The judgement uses `comp_algorithm` rather than
+`/proc/crypto` on purpose: it answers "can zram use it" directly and the script
+has to read it for the log anyway, so the check costs one file read instead of
+two.
+
 ### Measured against a kernel that has everything built in
 
 A custom `6.1.138` build with every algorithm compiled in makes a real A/B
