@@ -2,7 +2,7 @@
 
 **在原始 Android GKI 内核上以可加载模块的方式扩展 ZRAM 压缩算法 —— 不重编内核、不刷 boot。**
 
-[English](../README.md) · [Releases](../../releases/latest)
+[English](README.md) · [Releases](../../releases/latest)
 
 ---
 
@@ -39,7 +39,7 @@
 
 **一共有多少种算法？** 上游有 7 个 zram 能用的算法名，而 zram 本身一个都不
 强制——完整清单、为什么 `comp_algorithm` 只显示其中一部分、以及怎么查设备，
-见 [ZRAM-ALGORITHMS.zh.md](ZRAM-ALGORITHMS.zh.md)。
+见 [ZRAM-ALGORITHMS.zh-CN.md](docs/ZRAM-ALGORITHMS.zh-CN.md)。
 
 ## 为什么能做成模块
 
