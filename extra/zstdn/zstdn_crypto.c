@@ -57,6 +57,46 @@
 
 #include <crypto/internal/scompress.h>
 
+/* 运行时符号解析：vendor 内核可能没导出下面这些 zstd/crypto 辅助函数 */
+#include "../compat/zram_symres.h"
+
+/*
+ * Qualcomm SM7675 / 6.1.138 实测：下面 12 个符号在 kallsyms 里都在，
+ * 但没有 EXPORT_SYMBOL，静态链接会让整个模块装不上。
+ *
+ * 用 typeof(&name) 取指针类型 —— 声明体由 <linux/zstd.h> 和
+ * <crypto/internal/scompress.h> 提供，比手写签名不容易错。
+ *
+ * 调用这些指针的函数都标了 __nocfi：CONFIG_CFI_CLANG 在间接调用点做
+ * 类型检查，不标会被 kCFI 拒绝。
+ */
+static typeof(&zstd_get_params) zr_zstd_get_params;
+static typeof(&zstd_cctx_workspace_bound) zr_zstd_cctx_workspace_bound;
+static typeof(&zstd_dctx_workspace_bound) zr_zstd_dctx_workspace_bound;
+static typeof(&zstd_init_cctx) zr_zstd_init_cctx;
+static typeof(&zstd_init_dctx) zr_zstd_init_dctx;
+static typeof(&zstd_compress_cctx) zr_zstd_compress_cctx;
+static typeof(&zstd_decompress_dctx) zr_zstd_decompress_dctx;
+static typeof(&zstd_is_error) zr_zstd_is_error;
+static typeof(&zstd_min_clevel) zr_zstd_min_clevel;
+static typeof(&zstd_max_clevel) zr_zstd_max_clevel;
+static typeof(&crypto_register_scomp) zr_register_scomp;
+static typeof(&crypto_unregister_scomp) zr_unregister_scomp;
+
+#define zstd_get_params(...) zr_zstd_get_params(__VA_ARGS__)
+#define zstd_cctx_workspace_bound(...) zr_zstd_cctx_workspace_bound(__VA_ARGS__)
+#define zstd_dctx_workspace_bound(...) zr_zstd_dctx_workspace_bound(__VA_ARGS__)
+#define zstd_init_cctx(...) zr_zstd_init_cctx(__VA_ARGS__)
+#define zstd_init_dctx(...) zr_zstd_init_dctx(__VA_ARGS__)
+#define zstd_compress_cctx(...) zr_zstd_compress_cctx(__VA_ARGS__)
+#define zstd_decompress_dctx(...) zr_zstd_decompress_dctx(__VA_ARGS__)
+#define zstd_is_error(...) zr_zstd_is_error(__VA_ARGS__)
+#define zstd_min_clevel(...) zr_zstd_min_clevel(__VA_ARGS__)
+#define zstd_max_clevel(...) zr_zstd_max_clevel(__VA_ARGS__)
+#define crypto_register_scomp(a)   zr_register_scomp(a)
+#define crypto_unregister_scomp(a) zr_unregister_scomp(a)
+
+
 /* 与 OPPO zstdn_o 的 ZSTD_DEF_LEVEL 一致；内核自带 zstd 用 3 */
 #define ZSTDN_DEF_LEVEL		1
 /*
@@ -177,14 +217,14 @@ static void zstdn_scomp_free_ctx(struct crypto_scomp *tfm, void *ctx)
 	zstdn_ctx_free(ctx);
 }
 
-static int zstdn_scompress(struct crypto_scomp *tfm, const u8 *src,
+static int __nocfi zstdn_scompress(struct crypto_scomp *tfm, const u8 *src,
 			   unsigned int slen, u8 *dst, unsigned int *dlen,
 			   void *ctx)
 {
 	return __zstdn_compress(src, slen, dst, dlen, ctx);
 }
 
-static int zstdn_sdecompress(struct crypto_scomp *tfm, const u8 *src,
+static int __nocfi zstdn_sdecompress(struct crypto_scomp *tfm, const u8 *src,
 			     unsigned int slen, u8 *dst, unsigned int *dlen,
 			     void *ctx)
 {
@@ -239,7 +279,7 @@ static void zstdn_cra_exit(struct crypto_tfm *tfm)
 	*slot = NULL;
 }
 
-static int zstdn_compress(struct crypto_tfm *tfm,
+static int __nocfi zstdn_compress(struct crypto_tfm *tfm,
 			  const u8 *src, unsigned int slen,
 			  u8 *dst, unsigned int *dlen)
 {
@@ -248,7 +288,7 @@ static int zstdn_compress(struct crypto_tfm *tfm,
 	return __zstdn_compress(src, slen, dst, dlen, *slot);
 }
 
-static int zstdn_decompress(struct crypto_tfm *tfm,
+static int __nocfi zstdn_decompress(struct crypto_tfm *tfm,
 			    const u8 *src, unsigned int slen,
 			    u8 *dst, unsigned int *dlen)
 {
@@ -279,6 +319,18 @@ ZSTDN_LEGACY_ALG(alg_zstdn_o, "zstdn_o");
 static int __init zstdn_mod_init(void)
 {
 	int ret;
+	ZR_REQUIRE(zr_zstd_get_params, zstd_get_params);
+	ZR_REQUIRE(zr_zstd_cctx_workspace_bound, zstd_cctx_workspace_bound);
+	ZR_REQUIRE(zr_zstd_dctx_workspace_bound, zstd_dctx_workspace_bound);
+	ZR_REQUIRE(zr_zstd_init_cctx, zstd_init_cctx);
+	ZR_REQUIRE(zr_zstd_init_dctx, zstd_init_dctx);
+	ZR_REQUIRE(zr_zstd_compress_cctx, zstd_compress_cctx);
+	ZR_REQUIRE(zr_zstd_decompress_dctx, zstd_decompress_dctx);
+	ZR_REQUIRE(zr_zstd_is_error, zstd_is_error);
+	ZR_REQUIRE(zr_zstd_min_clevel, zstd_min_clevel);
+	ZR_REQUIRE(zr_zstd_max_clevel, zstd_max_clevel);
+	ZR_REQUIRE(zr_register_scomp, crypto_register_scomp);
+	ZR_REQUIRE(zr_unregister_scomp, crypto_unregister_scomp);
 
 	/*
 	 * 级别越界不是"自动收敛"就是未定义行为。与其让 zram 收进一堆压不动

@@ -33,6 +33,27 @@
 
 #include <crypto/internal/scompress.h>
 
+/* 运行时符号解析：vendor 内核可能没导出下面这些辅助函数 */
+#include "../compat/zram_symres.h"
+
+static int (*zr_register_scomp)(struct scomp_alg *);
+static void (*zr_unregister_scomp)(struct scomp_alg *);
+static int (*zr_LZ4_compress_HC)(const char *, char *, int, int, int, void *);
+static int (*zr_LZ4_decompress_safe)(const char *, char *, int, int);
+
+/*
+ * 四个符号在部分 vendor 内核上存在但未导出（Qualcomm SM7675 / 6.1.138 实测）。
+ * 前两个只在 init/exit 用；后两个在压缩/解压热路径上，走间接调用。
+ * 调用这些指针的函数都标了 __nocfi —— CONFIG_CFI_CLANG 会检查间接调用点。
+ */
+#define crypto_register_scomp(a)   zr_register_scomp(a)
+#define crypto_unregister_scomp(a) zr_unregister_scomp(a)
+#define LZ4_compress_HC(src, dst, slen, dlen, level, ctx)		\
+	zr_LZ4_compress_HC((src), (dst), (slen), (dlen), (level), (ctx))
+#define LZ4_decompress_safe(src, dst, slen, dlen)			\
+	zr_LZ4_decompress_safe((src), (dst), (slen), (dlen))
+
+
 /*
  * LZ4HC 的压缩级别决定压缩率/速度取舍：3 最快、16 压缩率最高，内核默认 9。
  * 想在同样内存占用下多榨一点压缩率就 insmod lz4hc_level=16；想少占 CPU 就
@@ -149,7 +170,7 @@ static void lz4hc_exit(struct crypto_tfm *tfm)
 	lz4hc_free_ctx(NULL, ctx->lz4hc_comp_mem);
 }
 
-static int lz4hc_compress_crypto(struct crypto_tfm *tfm, const u8 *src,
+static int __nocfi lz4hc_compress_crypto(struct crypto_tfm *tfm, const u8 *src,
 				 unsigned int slen, u8 *dst,
 				 unsigned int *dlen)
 {
@@ -159,7 +180,7 @@ static int lz4hc_compress_crypto(struct crypto_tfm *tfm, const u8 *src,
 				       ctx->lz4hc_comp_mem);
 }
 
-static int lz4hc_decompress_crypto(struct crypto_tfm *tfm, const u8 *src,
+static int __nocfi lz4hc_decompress_crypto(struct crypto_tfm *tfm, const u8 *src,
 				   unsigned int slen, u8 *dst,
 				   unsigned int *dlen)
 {
@@ -180,9 +201,14 @@ static struct crypto_alg alg_lz4hc = {
 };
 #endif /* < 6.6 */
 
-static int __init lz4hc_mod_init(void)
+static int __init __nocfi lz4hc_mod_init(void)
 {
+
 	int ret;
+	ZR_REQUIRE(zr_register_scomp, crypto_register_scomp);
+	ZR_REQUIRE(zr_unregister_scomp, crypto_unregister_scomp);
+	ZR_REQUIRE(zr_LZ4_compress_HC, LZ4_compress_HC);
+	ZR_REQUIRE(zr_LZ4_decompress_safe, LZ4_decompress_safe);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
 	ret = crypto_register_alg(&alg_lz4hc);
@@ -205,7 +231,7 @@ static int __init lz4hc_mod_init(void)
 	return 0;
 }
 
-static void __exit lz4hc_mod_exit(void)
+static void __exit __nocfi lz4hc_mod_exit(void)
 {
 	crypto_unregister_scomp(&scomp);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
