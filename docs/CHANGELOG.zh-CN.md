@@ -13,6 +13,56 @@
 `10001`–`10003` 这种小数字；如果新版本继续用小数字，KernelSU 更新器会认为
 版本更低而不推送。日期编码天然单调递增，不会再因版本重置而倒退。
 
+## 未发布 — 符号这一层
+
+这几项都源自同一件事：厂商内核可能把函数留在 `kallsyms` 里却没有导出，
+模块静态引用它就会 `Unknown symbol` 装不上，哪怕代码本体就在那儿。
+
+### 注册与编解码符号改运行时解析
+
+`842`、`lz4hc`、`zstdn` 都要调 `crypto_register_scomp()` /
+`crypto_unregister_scomp()`；`lz4hc` 还要 `LZ4_compress_HC()` 和
+`LZ4_decompress_safe()`；`zstdn` 要用十个 `zstd_*()` 入口。这些在部分厂商
+内核上存在但不在 `__ksymtab` 里。
+
+现在改成 init 时通过 kprobe 取 `kallsyms_lookup_name()`（见
+`extra/compat/zram_symres.h`）解析出地址，经函数指针调用。凡是通过指针
+发起的调用，所在函数都标了 `__nocfi` —— `CONFIG_CFI_CLANG` 会检查间接
+调用目标，不标就被拒。
+
+在 Qualcomm SM7675 / 6.1.138 上实测：不需要绕符号的四个算法
+（`lz4k`、`lz4kd`、`lz4k_oplus`、`zram_list`）照常加载，需要绕的三个
+也加载成功了，此前它们是装不上的。
+
+### 指针类型改由 BTF 生成
+
+`842` 和 `lz4hc` 原来手写这些指针的签名。现在类型来自
+`extra/compat/zram_symproto.h`，由 `scripts/gen_symproto.py` 从运行中内核的
+`/sys/kernel/btf/vmlinux` 生成 —— 类型是内核实际有的那个，不是谁手打的
+那个；换一台设备也只是重跑一条命令。
+
+`zstdn` 保持 `typeof(&f)`：那几个函数由 `<linux/zstd.h>` 声明，`typeof`
+不可能和声明漂移；生成的头只覆盖没有包含对应头文件的符号。
+
+脚本还能反着用（`--from-ko`）：读一个编译好的 `.ko`，报出它的未定义符号里
+哪些是内核 BTF 认识的 —— 就是下面设备端检查用的同一份清单。
+
+### 构建期记录未定义符号，设备端核对导出表
+
+`scripts/build_modules.sh` 在编译时把每个模块的未定义符号写进
+`ko/symcheck-<kmi>.txt`。`action.sh` 拿它比对 `/proc/kallsyms` 里的
+`__ksymtab_` 条目，直接报出本内核缺哪几个，而不是让用户自己去
+`post-fs-data.sh` 的日志里翻。
+
+`/proc/kallsyms` 只读一次、单趟比对：逐符号 grep 会让二十多万行的文件把
+「操作」按钮按出假死。
+
+### 算法为什么不需要拆
+
+每个压缩算法本来就是独立的 `.ko`（单独编译、单独加载），装不上也不会连累
+别的：`post-fs-data.sh` 给它记一条 `[FAIL]` 就继续下一个。上面那台设备上一
+共七个模块、三个失败四个正常，降级是天然的。这一项没有要改的。
+
 ## v0.1.0 — 第一个打过 tag 的预览版
 
 `versionCode` 20261115。
