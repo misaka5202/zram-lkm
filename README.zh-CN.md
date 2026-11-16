@@ -68,6 +68,53 @@ modprobe 找到 lz4k.ko 的 MODULE_ALIAS_CRYPTO("lz4k")
 这类是**代码路径级**的编译开关，被 `#ifdef` 整段删除，模块没有可挂的点。
 压缩算法不属于这一类。
 
+## 厂商没导出的符号
+
+有些厂商内核把函数留在 `kallsyms` 里，却没有导出。模块静态引用这种符号会
+直接 `Unknown symbol` 装不上 —— 哪怕代码本体就在镜像里。
+
+在 Qualcomm `SM7675 / 6.1.138` 上，六个算法模块里有三个是这种情况：
+
+| 模块 | 运行时需要解析的符号 |
+|---|---|
+| `842` | `crypto_register_scomp`、`crypto_unregister_scomp` |
+| `lz4hc` | 上面两个，加 `LZ4_compress_HC`、`LZ4_decompress_safe` |
+| `zstdn` | 上面两个，加十个 `zstd_*()` 入口 |
+
+做法改成 init 时解析地址：先用 kprobe 取到 `kallsyms_lookup_name()`，之后所有
+符号都从它查（`extra/compat/zram_symres.h`）。调用走函数指针，凡是这样调用的
+函数都标了 `__nocfi` —— `CONFIG_CFI_CLANG` 会校验间接调用目标，不标就被拒。
+
+**代价是什么。** 查找只在 `insmod` 时做一次。实测加载耗时跟符号数量无关：
+`lz4k`（0 个）、`lz4hc`（4 个）、`zstdn`（12 个）都落在 50–90 ms 这一档，
+那是模块加载器本身的成本。运行期唯一的差别是每次编解码调用多一层间接跳转，
+而且只在 `lz4hc` 和 `zstdn` 上 —— `842` 自带编解码器，热路径一次都没有。
+这个量级是几纳秒对每页几十微秒，比在真机上能做的任何测量的抖动都小。
+
+**前提是什么。** 需要 `CONFIG_KALLSYMS_ALL`。如果函数在内核里压根不存在，
+什么办法都没有；模块会在 init 失败并报出是哪个符号。
+
+**怎么看自己的内核缺什么。** 构建时会把每个模块的未定义符号写进
+`ko/symcheck-<kmi>.txt`；「操作」按钮拿它比对 `/proc/kallsyms` 里的
+`__ksymtab_` 条目，直接列出本内核没导出的那几个 —— 报 issue 时能说清缺什么，
+而不是只贴一句 `Unknown symbol`。
+
+**指针类型从哪来。** `extra/compat/zram_symproto.h` 由
+`scripts/gen_symproto.py` 从内核自己的 BTF 生成 —— 那是运行中镜像对自己类型的
+描述，不是谁手打的签名：
+
+```sh
+python3 scripts/gen_symproto.py --btf vmlinux.btf \
+    --symbols crypto_register_scomp crypto_unregister_scomp \
+              LZ4_compress_HC LZ4_decompress_safe \
+    --out extra/compat/zram_symproto.h
+```
+
+`--from-ko` 反过来，从编译好的模块推它需要哪些符号；`--verify` 重新生成并与
+已提交的头逐字节比对 —— 换一台陌生设备时用它确认，不用改任何代码。
+`zstdn` 保持 `typeof(&f)`：那十个函数 `<linux/zstd.h>` 已经声明了，`typeof`
+不可能和声明漂移；生成的头只覆盖没有包含对应头文件的那些符号。
+
 ## 安装
 
 下载 `zram-lkm-arm64.zip`（全 KMI）或 `zram-lkm-<kmi>-arm64.zip`（单 KMI），
@@ -128,6 +175,29 @@ AUTO_SWITCH=1
 | 内存小、追求压缩率 | `lz4kd`（delta 变体，对相似页更省） |
 | 追求低延迟（游戏、前台响应） | `lzo-rle`（内核自带，最快） |
 | 折中 | `lz4k` / `lz4k_oplus` |
+
+在 Redmi Pad（`2410CRP4CG`，`SM7675`，内核 `6.1.138`）上实测：把 60 MB 真实
+`.so` 文件写进一个临时 zram 设备。
+
+| 算法 | 写入 | 读回 | 压缩后（原始 63.11 MB） |
+|---|---|---|---|
+| `lz4k` | 279 MB/s | 526 MB/s | 41.59 MB |
+| `lz4k_oplus` | 270 MB/s | 487 MB/s | 41.27 MB |
+| `lz4kd` | 256 MB/s | 521 MB/s | 40.57 MB |
+| `lzo` | 252 MB/s | 397 MB/s | 40.23 MB |
+| `lz4` | 232 MB/s | 487 MB/s | 40.19 MB |
+| `lzo-rle` | 223 MB/s | 495 MB/s | 40.42 MB |
+| `zstdn` | 137 MB/s | 304 MB/s | 31.13 MB |
+| `lz4hc` | 127 MB/s | 400 MB/s | 38.10 MB |
+| `zstd` | 116 MB/s | 312 MB/s | 30.99 MB |
+| `842` | 69 MB/s | 179 MB/s | 37.25 MB |
+
+一台机器、跑一轮。同一台设备上重复测量，写入抖到 20%、读回抖到 50%，所以这
+些数字只能当量级看：lz4 那一家子彼此的差别落在噪声里，真正的差距在
+「lz4 一家」到 `lz4hc`/`zstdn`、再到 `842` 之间。**别拿组内排名当结论，比的是组。**
+
+另外，样本是桌面侧的共享库，而手机上 zram 装的是匿名页 —— 这里压缩比好，不等于
+你手机上的内存省得多。
 
 **一定要在自己设备、自己数据上量**：网上流传的比值都是别人的设备和别人的
 数据。模块自带测量脚本：

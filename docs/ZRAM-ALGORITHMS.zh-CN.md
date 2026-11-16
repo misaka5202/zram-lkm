@@ -95,7 +95,10 @@ zram 候选。
 ## 该选哪个
 
 压缩率和速度取决于设备和负载，所以本项目给的是 `scripts/zram-bench.sh`，
-而不是一张拍脑袋的对比表。ARM64 上大致从快到高压缩率：
-`lz4` → `lz4k` → `lz4hc`（`lz4hc_level` 3-16）→ `zstd`。
-`lzo-rle` 的压缩率接近 `lz4k`、CPU 更低。页之间相似度高时
+而不是一张拍脑袋的对比表。README 里有一轮带出处、也带抖动范围的实测 —— 那
+适合拿来估量级，不适合拿来排名次，见
+[选择算法](../README.zh-CN.md#选择算法)。
+
+ARM64 上大致从快到高压缩率：`lz4` → `lz4k` → `lz4hc`（`lz4hc_level` 3-16）
+→ `zstd`。`lzo-rle` 的压缩率接近 `lz4k`、CPU 更低。页之间相似度高时
 （zram swap 的常见情况）值得试 `lz4kd` 和 `lz4k_oplus`。

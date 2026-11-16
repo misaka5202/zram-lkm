@@ -34,6 +34,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # i18n.sh 的英文块是基线，zh/ja 只覆盖一部分；缺翻译不会报错，只会静默
+      # 回落到英文。所以这一类问题在真机上永远看不见，只能静态查。
+      - name: i18n 三种语言对齐
+        run: bash scripts/check-i18n.sh
+
   build:
     name: build
     uses: ./.github/workflows/build.yml

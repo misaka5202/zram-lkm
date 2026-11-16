@@ -96,8 +96,7 @@ M_P_UNKNOWN_ALGO="[SKIP] zram0 does not know %s (the module probably did not loa
 M_P_SWITCHED="[OK]   switched to %s"
 M_P_SWITCH_FAIL="[FAIL] switching to %s failed"
 
-# --- service.sh / uninstall.sh ---
-M_S_LOADED="[OK]   zram modules handled"
+# --- uninstall.sh ---
 M_U_NOTE="Module removed. Rebooting is cleaner: the algorithms stay registered"
 M_U_NOTE2="until the next reboot even after the .ko files are gone."
 M_U_NO_REBOOT="(no reboot performed)"
@@ -107,6 +106,7 @@ M_U_NO_REBOOT="(no reboot performed)"
 # ---------------------------------------------------------------------------
 case "$LANG_CODE" in
 zh)
+    M_TITLE="ZRAM LKM"
     M_TAGLINE="ZRAM 压缩算法扩展"
 
     M_ARCH_UNSUPPORTED="本模块只支持 arm64，当前架构："
@@ -156,40 +156,68 @@ zh)
     M_P_SWITCHED="[OK]   已切到 %s"
     M_P_SWITCH_FAIL="[FAIL] 切换 %s 失败"
 
-    M_S_LOADED="[OK]   zram 模块已处理"
     M_U_NOTE="模块已移除。建议重启：.ko 文件删掉后算法仍会保持注册，"
     M_U_NOTE2="直到下次重启。"
     M_U_NO_REBOOT="(未执行重启)"
     ;;
 ja)
+    M_TITLE="ZRAM LKM"
     M_TAGLINE="ZRAM 圧縮アルゴリズム拡張"
 
+    # customize.sh
     M_ARCH_UNSUPPORTED="このモジュールは arm64 専用です。現在のアーキテクチャ: "
     M_INSTALL_ABORTED="インストールを中止しました"
     M_KERNEL="カーネル: "
     M_MODULE_VER="バージョン: "
+    M_MAINLINE_510="メインライン: 5.10 (Android 12 / 13)"
+    M_MAINLINE_515="メインライン: 5.15 (Android 13 / 14)"
+    M_MAINLINE_61="メインライン: 6.1 (Android 14)"
+    M_MAINLINE_66="メインライン: 6.6 (Android 15)"
+    M_MAINLINE_612="メインライン: 6.12 (Android 16)"
+    M_MAINLINE_618="メインライン: 6.18 (Android 17)"
     M_MAINLINE_UNSUPPORTED="サポート対象外のメインライン: "
     M_MAINLINE_UNKNOWN="不明"
     M_ALGOS="アルゴリズム: lz4k / lz4kd / lz4k_oplus / lz4hc / 842"
+    M_EXTRA="追加: zram_list（モジュールのアルゴリズムを comp_algorithm に表示させる）"
     M_LOAD_ONLY="モジュールを読み込むだけで、アルゴリズムは切り替えません"
+    M_SWITCH_RISK="  切り替えると zram の内容が再構築されます。起動時にこれを行うとデータ消失の恐れがあります"
     M_MANUAL_SWITCH="手動切り替え:"
     M_LOG_PATH="ログ: /data/local/tmp/zram_lkm.log"
     M_REBOOT_HINT="インストール後に再起動してください"
 
+    # action.sh
     M_A_LOADED="=== 読み込み済みのアルゴリズムモジュール ==="
     M_A_NONE="未読み込み"
     M_A_CRYPTO="=== crypto に登録された compression アルゴリズム ==="
     M_A_COMP="=== zram0 の comp_algorithm ==="
     M_A_NO_ZRAM0="  (zram0 がありません)"
     M_A_HINTS="=== 補足 ==="
+    M_A_HINT_SWITCH="  アルゴリズムを切り替えると zram の内容が再構築されます（Android では zram0 は通常 swap）："
+    M_A_HINT_SWITCH2=""
+    M_A_HINT_ZRAMLIST="  zram_list は一覧表示を見やすくするだけで、実際の可用性には影響しません。"
     M_A_LOG="=== ログ（末尾 20 行）==="
     M_A_NO_LOG="(ログなし)"
 
+    # カーネルのエクスポート検査
+    M_SEC_EXPORT="カーネルのエクスポート検査"
+    M_EXPORT_NONE="実行中の KMI を判別できないためスキップします"
+    M_EXPORT_NOFILE="%s のシンボル一覧がない（nm なしでビルドした？）ためスキップします"
+    M_EXPORT_ALL_OK="このパッケージが必要とするシンボルは、このカーネルがすべてエクスポートしています"
+    M_EXPORT_MISS_ONE="%s はこのカーネルでエクスポートされていません"
+    M_EXPORT_MISS_HEAD="合計 %s 個のシンボルが不足しています。これはベンダーカーネルの"
+    M_EXPORT_MISS_TAIL="エクスポート表の差異であり、パッケージの破損ではありません。issue にはこの部分をそのまま貼ってください。"
+
+    # post-fs-data.sh（ログ専用）
     M_P_KMI_UNKNOWN="[SKIP] KMI を判別できません。推測はしません（別カーネル向けのモジュールを読み込むため）"
     M_P_SKIP_LOADED="[SKIP] %s (読み込み済み)"
     M_P_AUTOSWITCH="--- アルゴリズムを %s に切り替え ---"
     M_P_UNKNOWN_ALGO="[SKIP] zram0 は %s を知りません（モジュールの読み込みに失敗した可能性）"
     M_P_SWITCHED="[OK]   %s に切り替えました"
     M_P_SWITCH_FAIL="[FAIL] %s への切り替えに失敗"
+
+    # uninstall.sh
+    M_U_NOTE="モジュールを削除しました。再起動を推奨します: .ko を消してもアルゴリズムは"
+    M_U_NOTE2="次回の再起動まで登録されたままです。"
+    M_U_NO_REBOOT="(再起動は実行していません)"
     ;;
 esac

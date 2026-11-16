@@ -73,6 +73,28 @@ separately), so a module that cannot load never takes the others with it:
 `post-fs-data.sh` records `[FAIL]` for that file and moves on. Measured on the
 device above, three of seven failed and four still worked. Nothing to change.
 
+### Measured numbers, and translations that are actually complete
+
+The README's algorithm section used to say "measure it yourself" and stop
+there. It now also carries one measured run — 60 MB of real `.so` files on a
+`Redmi Pad 2410CRP4CG` (`SM7675`, `6.1.138`) — with the noise on that same
+device stated next to it (writes ±20%, reads ±50%) and a warning that the
+sample is desktop shared libraries while zram actually holds anonymous pages.
+`842` lands last at 69 MB/s, which is what upstream says about it: a reference
+implementation, not a fast one.
+
+The README also documents the symbol layer for the first time: which modules
+need runtime resolution, why the pointers are marked `__nocfi`, what the
+lookups cost, and how to check a new device with `scripts/gen_symproto.py`.
+
+The Japanese translation covered 26 of 48 strings, so a Japanese device fell
+back to English for everything the kernel-export check and the mainline labels
+print. It is complete now, and `scripts/check-i18n.sh` — wired into `ci.yml` —
+fails when a script references a key the English baseline does not define, or
+when any of the three languages drifts. One dead string (`M_S_LOADED`, never
+used by any script) is gone, and the three uninstall messages are now actually
+printed by `uninstall.sh` instead of sitting unused.
+
 ## v0.1.0 — first tagged preview
 
 `versionCode` 20261115.
