@@ -28,6 +28,21 @@
 
 #include <crypto/internal/scompress.h>
 
+/* 运行时符号解析：vendor 内核可能没导出下面这些辅助函数 */
+#include "../compat/zram_symres.h"
+
+static int (*zr_register_scomp)(struct scomp_alg *);
+static void (*zr_unregister_scomp)(struct scomp_alg *);
+
+/*
+ * vendor 内核可能没导出 crypto_register_scomp()/crypto_unregister_scomp()，
+ * 但函数本体在 kallsyms 里。重定向到运行时解析的指针。
+ * 只在 init/exit 调用，不涉及压缩热路径。
+ */
+#define crypto_register_scomp(a)   zr_register_scomp(a)
+#define crypto_unregister_scomp(a) zr_unregister_scomp(a)
+
+
 struct crypto842_ctx {
 	void *wmem;	/* working memory for compress */
 };
@@ -145,9 +160,12 @@ static struct crypto_alg alg = {
 };
 #endif /* < 6.6 */
 
-static int __init sw842_mod_init(void)
+static int __init __nocfi sw842_mod_init(void)
 {
+
 	int ret;
+	ZR_REQUIRE(zr_register_scomp, crypto_register_scomp);
+	ZR_REQUIRE(zr_unregister_scomp, crypto_unregister_scomp);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
 	ret = crypto_register_alg(&alg);
@@ -170,7 +188,7 @@ static int __init sw842_mod_init(void)
 	return 0;
 }
 
-static void __exit sw842_mod_exit(void)
+static void __exit __nocfi sw842_mod_exit(void)
 {
 	crypto_unregister_scomp(&scomp);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
