@@ -13,6 +13,47 @@
 `10001`–`10003` 这种小数字；如果新版本继续用小数字，KernelSU 更新器会认为
 版本更低而不推送。日期编码天然单调递增，不会再因版本重置而倒退。
 
+## v0.1.5
+
+`versionCode` 20261120。
+
+### 修复
+
+**`lz4k_oplus` 解压越界写。** 小字面量快路径拷贝 `NR_COPY_MIN`（32）字节时从不检查
+**目标缓冲区**余量，而紧邻其下的大字面量分支一直有。zram 解压的是 swap 后备设备上
+可被破坏的数据（攻击面和本项目已修的两处上游 842 CVE 相同），构造的压缩流最多能
+越过 vmalloc 输出缓冲区约 31 字节。现在两个分支都补上了同仓库华为版解码器
+（`extra/lz4k/lz4k_decode.c`）一直具备的目标检查。
+
+**畸形输入下的 NULL 解引用。** `get_size()` 在扩展长度越过输入末尾时返回 NULL，
+两处调用点却直接把它交给 `literal_decompress()` 并立即解引用。入口也补上了华为版
+一直有的非空与最小长度校验。
+
+**root 脚本经由全局可写路径写入。** `/data/local/tmp/zram_lkm.log`（以及 `zram-bench`
+工作目录）被 root 脚本截断、追加且没有符号链接检查，而 `/data/local/tmp` 任何应用都可
+写——预置一个符号链接就能让 root 截断或追加任意文件。日志已移到 `/data/adb`
+（仅 root）；旧位置迁移一次为 `.old`，若它是符号链接则直接删除、绝不跟随。
+
+**workflow 输入注入。** `release.yml` 把 `${{ inputs.tag }}` 插值进 `run:` 块，而
+Actions 是在 shell 解析**之前**做文本替换：含 `"`、`;` 或 `$( )` 的 tag 能逃逸引号，
+在以 `contents: write` 运行的 runner 上执行任意命令。现改为经 `env` 传入，并加锚定
+白名单与行数校验。
+
+**inline hook 的指令缓存未刷新。** `zram_list` 用普通存储把 trampoline 填进可执行的
+vmalloc 页，arm64 上 icache 与 dcache 不保证一致，而 `aarch64_insn_patch_text_nosync`
+只刷目标那一处指令、管不到 trampoline；别的 CPU 跳到那里可能取到陈旧字节。现在在
+patch 入口前对 trampoline 执行 `flush_icache_range()`。
+
+**诊断字符串损坏。** `zram_list_main.c` 两条日志仍残留被拼坏的 `'+ BS + 'n`
+（本应是 `\n`，早前脚本替换事故遗留），打印出来是字面量而非换行。
+
+### 变更
+
+**发布包名带上版本号。** 产物改为 `zram-lkm-<version>-arm64.zip`、
+`zram-lkm-<version>-<kmi>-arm64.zip` 与 `source-<version>.tar.gz`——此前每次下载
+文件名完全相同，看不出装的是哪个构建。版本从 `module.prop` 读取，发布不可能再悄悄
+产出上一个版本的文件名。
+
 ## v0.1.4
 
 `versionCode` 20261119。
