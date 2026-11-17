@@ -17,7 +17,7 @@ KernelSU updater decide the new build is *older* and never push it. Date
 encoding is monotonic by construction, so a version reset cannot move it
 backwards.
 
-## v0.1.6 (not released)
+## v0.1.6
 
 ### Changed
 
