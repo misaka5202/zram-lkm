@@ -19,7 +19,9 @@ set -u
 
 SAMPLE_MB="${SAMPLE_MB:-32}"
 DATA_FILE="${1:-}"
-WORK="/data/local/tmp/zram-bench"
+# 工作目录放 /data/adb（root-only）而不是 /data/local/tmp：后者全局可写，
+# 普通用户可预置符号链接，本脚本以 root 写入时变成任意文件覆写。
+WORK="/data/adb/zram-bench"
 LOG="$WORK/result.txt"
 
 die() { echo "错误：$*" >&2; exit 1; }
@@ -27,6 +29,9 @@ die() { echo "错误：$*" >&2; exit 1; }
 [ "$(id -u)" = "0" ] || die "需要 root"
 [ -e /sys/block/zram0 ] || die "没有 /sys/block/zram0（zram 未加载？）"
 
+# 防符号链接：路径若是指向别处的链接，拒绝而不是顺着写
+[ -L "$WORK" ] && die "$WORK 是符号链接，拒绝继续"
+umask 077
 mkdir -p "$WORK"
 
 # ---- 备份当前状态 ----

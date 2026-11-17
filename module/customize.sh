@@ -29,7 +29,7 @@ else
     M_LOAD_ONLY="Loads the modules only, does not switch algorithms"
     M_SWITCH_RISK="  switching rebuilds the zram contents; doing that at boot risks data loss"
     M_MANUAL_SWITCH="Manual switch:"
-    M_LOG_PATH="Log: /data/local/tmp/zram_lkm.log"
+    M_LOG_PATH="Log: /data/adb/modules/zram_lkm/zram_lkm.log"
     M_REBOOT_HINT="Reboot after installation"
 fi
 

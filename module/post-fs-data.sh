@@ -19,8 +19,20 @@
 #       AUTO_SWITCH=1
 
 MODDIR=${0%/*}
-LOG="/data/local/tmp/zram_lkm.log"
+# 日志放模块目录而不是 /data/local/tmp：后者全局可写，普通用户可以先放一个
+# 指向别处的符号链接，开机时本脚本以 root 执行 `: > "$LOG"` 就会把链接目标
+# 截断 —— 任意文件覆写。/data/adb 只有 root 能进，链接攻击面消失。
+LOG="$MODDIR/zram_lkm.log"
 CONF="$MODDIR/zram_lkm.conf"
+
+# 上一版日志在 /data/local/tmp；老 issue 模板也写那个路径。开机时把它挪成
+# 同目录的 .old 备份保留一轮，并清理旧位置，不断链。旧路径是普通用户可写的，
+# 可能是指向别处的符号链接：链接只删不搬，绝不把链接内容读进来或跟着写。
+if [ -L /data/local/tmp/zram_lkm.log ]; then
+    rm -f /data/local/tmp/zram_lkm.log
+elif [ -f /data/local/tmp/zram_lkm.log ]; then
+    mv -f /data/local/tmp/zram_lkm.log "$MODDIR/zram_lkm.log.old" 2>/dev/null
+fi
 
 # 文案目录。post-fs-data 阶段 property service 已起来，getprop 可用；
 # 取不到时 i18n.sh 自己退回英文。

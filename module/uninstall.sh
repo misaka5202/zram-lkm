@@ -16,8 +16,9 @@ ZR_I18N="$MODDIR/i18n.sh"
 : "${M_U_NOTE2:=until the next reboot even after the .ko files are gone.}"
 : "${M_U_NO_REBOOT:=(no reboot performed)}"
 
+rm -f "$MODDIR/zram_lkm.log" "$MODDIR/zram_lkm.log.old"
+# 旧版本的日志在 /data/local/tmp（symlink 攻击面，已废弃）；卸载时一并清理
 rm -f /data/local/tmp/zram_lkm.log
-rm -f /data/local/tmp/zram_lkm.log.old
 
 echo "$M_U_NOTE"
 echo "$M_U_NOTE2"

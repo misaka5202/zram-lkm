@@ -80,7 +80,7 @@ body:
     attributes:
       label: Load log
       description: |
-        `cat /data/local/tmp/zram_lkm.log`
+        `cat /data/adb/modules/zram_lkm/zram_lkm.log`
         If you insmodded by hand, paste that command's full output too,
         together with the matching lines from dmesg.
       render: shell
@@ -99,7 +99,7 @@ body:
            su -c dmesg > /sdcard/dmesg.txt
 
         2. The module's own log
-           su -c 'cat /data/local/tmp/zram_lkm.log' > /sdcard/zram_lkm.log
+           su -c 'cat /data/adb/modules/zram_lkm/zram_lkm.log' > /sdcard/zram_lkm.log
 
         3. For hangs, reboots or safe mode: the *previous* boot's log
            su -c 'cat /sys/fs/pstore/console-ramoops-0' > /sdcard/pstore.txt

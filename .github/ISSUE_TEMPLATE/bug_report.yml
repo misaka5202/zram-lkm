@@ -78,7 +78,7 @@ body:
     attributes:
       label: 加载日志
       description: |
-        `cat /data/local/tmp/zram_lkm.log`
+        `cat /data/adb/modules/zram_lkm/zram_lkm.log`
         以及手动 insmod 的话，贴那条命令的完整输出（含 dmesg 里对应的行）。
       render: shell
     validations:
@@ -96,7 +96,7 @@ body:
            su -c dmesg > /sdcard/dmesg.txt
 
         2. 模块自己的日志
-           su -c 'cat /data/local/tmp/zram_lkm.log' > /sdcard/zram_lkm.log
+           su -c 'cat /data/adb/modules/zram_lkm/zram_lkm.log' > /sdcard/zram_lkm.log
 
         3. 开机卡住、重启、进安全模式时，要**上一轮**开机的日志
            su -c 'cat /sys/fs/pstore/console-ramoops-0' > /sdcard/pstore.txt
