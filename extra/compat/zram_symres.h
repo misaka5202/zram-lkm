@@ -25,6 +25,20 @@
  * 用 ZR_SYM / ZR_REQUIRE，zram_list 直接调 zr_lookup。此前 zram_list 另有一份
  * 逐字相同的 kprobe 探测实现，已并入这里（同一个模式抄两遍，改一处漏一处）。
  *
+ * 两条解析途径，按顺序降级
+ * ----------------------
+ * 1. KallRecon（extra/kallrecon/，与 droidspaces-lkm 的 cgrouplimits 同源）：
+ *    直接解析内核的 kallsyms 表拿 kallsyms_lookup_name，**不依赖 kprobe**。
+ *    顺带解决 kprobe 的两个短板：kptr_restrict 无关（不走 /proc/kallsyms），
+ *    且不受 kprobe 黑名单限制（aarch64_insn_patch_text_nosync 这类也能查到）。
+ * 2. kprobe 探测：KallRecon 不可用（布局探测失败）时的回退，行为同改动前。
+ *
+ * 因为第 1 条存在，绝大多数内核上 kprobe 探测路径**根本不会执行** ——
+ * 运行期已不再依赖 kprobe。但 register_kprobe 的链接期引用刻意保留：
+ * KallRecon 万一布局探测失败时，静态链接的 kprobe 是唯一退路，去掉它
+ * （同名转发）会把"多一条路"变成"少一条路"。register_kprobe 是
+ * EXPORT_SYMBOL_GPL，CONFIG_KPROBES=y 的 GKI 内核都会导出，缺失极少见。
+ *
  * CFI 注意
  * --------
  * CONFIG_CFI_CLANG=y 的内核会在**间接调用点**做类型检查。通过这里解析出来的
@@ -44,8 +58,24 @@
 
 typedef unsigned long (*zr_kln_fn)(const char *name);
 
+/* KallRecon 的入口。这里只 extern 声明而不 include "kallrecon/core.h" ——
+ * 头文件路径会随调用方目录变化（staging 后 kallrecon/ 在各模块目录下），
+ * 重复声明与 core.h 一致即可，和 cgrouplimits/common.c 同一处理。 */
+extern unsigned long (*kallrecon_klp)(const char *name);
+extern void find_kallsyms_base(void);
+
 /* 每个编译单元各有一份，模块内不会冲突 */
 static zr_kln_fn zr_kln;
+static bool zr_kr_tried;
+
+static void zr_kr_init(void)
+{
+	if (zr_kr_tried)
+		return;
+	zr_kr_tried = true;
+	/* 幂等：core.c 内部用 ks_done 保证只探测一次 */
+	find_kallsyms_base();
+}
 
 static unsigned long zr_lookup_probe(const char *name)
 {
@@ -63,6 +93,13 @@ static unsigned long zr_lookup_probe(const char *name)
 
 static unsigned long zr_lookup(const char *name)
 {
+	zr_kr_init();
+
+	/* 首选 KallRecon：不依赖 kprobe，也不受 kprobe 黑名单限制 */
+	if (kallrecon_klp)
+		return kallrecon_klp(name);
+
+	/* 回退：kprobe 探测（KallRecon 布局探测失败时） */
 	if (!zr_kln)
 		zr_kln = (zr_kln_fn)zr_lookup_probe("kallsyms_lookup_name");
 	if (zr_kln)

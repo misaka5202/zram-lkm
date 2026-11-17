@@ -28,6 +28,15 @@ FAILED=()
 log()  { printf '%s\n' "$*"; }
 warn() { printf '  [WARN] %s\n' "$*"; FAILED+=("$*"); }
 
+# KallRecon 是公共源码（仓库里只维护 extra/kallrecon/ 一份），但 kbuild 的
+# M= 编译只接受模块目录内的对象，不能引用 ../kallrecon/*.o。所以编译前把
+# 源码复制进每个模块目录，构建结束随 clean_src 一起清掉（见 .gitignore）。
+stage_kallrecon() {
+    local src="$1"
+    rm -rf "$src/kallrecon"
+    cp -r "$WS/extra/kallrecon" "$src/kallrecon"
+}
+
 clean_src() {
     local src="$1"
     find "$src" -name '*.o' -delete 2>/dev/null || true
@@ -47,6 +56,7 @@ for m in lz4k lz4kd lz4k_oplus lz4hc 842 zstdn zram_list; do
     [ -f "$SRC/Makefile" ] || { warn "$m @ $KMI (无 Makefile)"; continue; }
     log "=== $m @ $KMI ==="
     clean_src "$SRC"
+    stage_kallrecon "$SRC"
     if make -C "$KDIR" M="$SRC" "${EXTRA_MAKE_ARGS[@]}" modules -j"$NPROC"; then
         if [ -f "$SRC/$m.ko" ]; then
             cp "$SRC/$m.ko" "$OUT/$m-$KMI.ko"
