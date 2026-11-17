@@ -49,6 +49,8 @@
 #include <linux/workqueue.h>
 #include <asm/cacheflush.h>
 
+#include "../compat/zram_symres.h"
+
 #define ZL_NAME		"zram_list"
 #define ZL_REACH	0x7000000UL	/* 112MB：b 的量程留 16MB 余量 */
 
@@ -87,41 +89,17 @@ static u32 zl_saved;
 static bool zl_hooked;
 
 /*
- * 符号解析。
+ * 符号解析统一走 compat/zram_symres.h 的 zr_lookup()。
  *
- * 第一段用 kprobe 的 symbol_name 查找，绕开 kptr_restrict。但它只能找到
- * "可探测"的函数：aarch64_insn_patch_text_nosync 这类在 kprobe 黑名单里的
- * 就拿不到。
+ * 这里原本有第二份 kprobe 探测实现（zl_lookup_probe/zl_lookup），与
+ * zram_symres.h 的 zr_lookup_probe/zr_lookup 逐字相同 —— 同一个模式抄了两遍，
+ * 改一处漏一处。现在四个 crypto 模块 + 本模块共用一个入口：
+ * 先 kprobe 拿 kallsyms_lookup_name，再交给它查全部符号。
  *
- * 所以先只用 kprobe 拿到 kallsyms_lookup_name（它本身不在黑名单），后面所有
- * 符号都交给它——CONFIG_KALLSYMS_ALL=y 时它能查到内核里任何符号，包括模块。
+ * 已知边界：整套解析以 kprobe 为前提。内核既没导出 register_kprobe 又没编
+ * CONFIG_KPROBES 时 zr_lookup 返回 0 —— 本模块按"挂不上就放弃"处理
+ * （zl_target 为空即不 hook），不会因此 panic。
  */
-typedef unsigned long (*zl_kln_fn)(const char *name);
-
-static zl_kln_fn zl_kln;
-
-static unsigned long zl_lookup_probe(const char *name)
-{
-	struct kprobe kp;
-	unsigned long addr;
-
-	memset(&kp, 0, sizeof(kp));
-	kp.symbol_name = name;
-	if (register_kprobe(&kp))
-		return 0;
-	addr = (unsigned long)kp.addr;
-	unregister_kprobe(&kp);
-	return addr;
-}
-
-static unsigned long zl_lookup(const char *name)
-{
-	if (!zl_kln)
-		zl_kln = (zl_kln_fn)zl_lookup_probe("kallsyms_lookup_name");
-	if (zl_kln)
-		return zl_kln(name);
-	return zl_lookup_probe(name);
-}
 
 static bool zl_reachable(unsigned long from, unsigned long to);
 
@@ -139,8 +117,8 @@ static void *zl_alloc_near(unsigned long near, size_t size)
 	if (!near)
 		return NULL;
 
-	img_s = zl_lookup("_text");
-	img_e = zl_lookup("_end");
+	img_s = zr_lookup("_text");
+	img_e = zr_lookup("_end");
 
 	/*
 	 * [WINDOW] 多窗口尝试。
@@ -150,7 +128,7 @@ static void *zl_alloc_near(unsigned long near, size_t size)
 	 * 返回 NULL。所以按多个距离、上下两个方向分别开窗。
 	 */
 	if (!zl_vmalloc_range) {
-		zl_vmalloc_range = (zl_vmalloc_range_fn)zl_lookup("__vmalloc_node_range");
+		zl_vmalloc_range = (zl_vmalloc_range_fn)zr_lookup("__vmalloc_node_range");
 		if (!zl_vmalloc_range) {
 			pr_warn(ZL_NAME ": __vmalloc_node_range unresolved\n");
 			return NULL;
@@ -417,14 +395,14 @@ static int zl_install(void)
 	long off;
 	int ret;
 
-	zl_target = zl_lookup("zcomp_available_show");
+	zl_target = zr_lookup("zcomp_available_show");
 	if (!zl_target) {
 		pr_info(ZL_NAME ": zcomp_available_show not found; "
 			"is zram loaded?\n");
 		return -ENOENT;
 	}
 
-	zl_patch_insn = (zl_patch_insn_fn)zl_lookup("aarch64_insn_patch_text_nosync");
+	zl_patch_insn = (zl_patch_insn_fn)zr_lookup("aarch64_insn_patch_text_nosync");
 	if (!zl_patch_insn) {
 		pr_warn(ZL_NAME ": aarch64_insn_patch_text_nosync unavailable\n");
 		return -ENODATA;
