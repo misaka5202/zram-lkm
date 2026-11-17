@@ -81,9 +81,12 @@ modprobe 找到 lz4k.ko 的 MODULE_ALIAS_CRYPTO("lz4k")
 | `lz4hc` | 上面两个，加 `LZ4_compress_HC`、`LZ4_decompress_safe` |
 | `zstdn` | 上面两个，加十个 `zstd_*()` 入口 |
 
-做法改成 init 时解析地址：先用 kprobe 取到 `kallsyms_lookup_name()`，之后所有
-符号都从它查（`extra/compat/zram_symres.h`）。调用走函数指针，凡是这样调用的
-函数都标了 `__nocfi` —— `CONFIG_CFI_CLANG` 会校验间接调用目标，不标就被拒。
+做法改成 init 时解析地址。`extra/compat/zram_symres.h` 优先走
+**KallRecon**（`extra/kallrecon/`）：直接解析内核的 kallsyms 表，不依赖 kprobe、
+不受 `kptr_restrict` 影响，连 kprobe 黑名单里的目标也能查到。KallRecon 布局
+探测失败时退回旧路径 —— 用 kprobe 取 `kallsyms_lookup_name()` 再逐个查。
+调用走函数指针，凡是这样调用的函数都标了 `__nocfi` —— `CONFIG_CFI_CLANG`
+会校验间接调用目标，不标就被拒。
 
 **代价是什么。** 查找只在 `insmod` 时做一次。实测加载耗时跟符号数量无关：
 `lz4k`（0 个）、`lz4hc`（4 个）、`zstdn`（12 个）都落在 50–90 ms 这一档，
