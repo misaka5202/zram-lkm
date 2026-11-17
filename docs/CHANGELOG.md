@@ -17,6 +17,28 @@ KernelSU updater decide the new build is *older* and never push it. Date
 encoding is monotonic by construction, so a version reset cannot move it
 backwards.
 
+## v0.1.6 (not released)
+
+### Changed
+
+**KallRecon is now the primary resolver.** `extra/kallrecon/` parses the
+kernel's kallsyms table directly, so symbol resolution no longer depends on
+kprobe: no `register_kprobe` requirement, no kprobe blacklist (targets such as
+`aarch64_insn_patch_text_nosync` resolve fine), and independent of
+`kptr_restrict`. The kprobe probe remains as a fallback when KallRecon's layout
+discovery fails. All five modules that resolve symbols (lz4hc / 842 / zstdn /
+zram_list, plus the resolver itself) go through `extra/compat/zram_symres.h`.
+
+**`zram_list` no longer carries a second copy of the resolver.** Its
+`zl_lookup_probe`/`zl_lookup` were byte-for-byte the same as
+`zr_lookup_probe`/`zr_lookup`; one entry point now serves all five modules.
+
+### Verified
+
+Full KMI matrix builds green, and the 6.1 artifact's `.symtab` confirms
+`find_kallsyms_base` / `kallrecon_klp` are resolved (no longer undefined), so
+the engine is really linked in.
+
 ## v0.1.5
 
 `versionCode` 20261120.

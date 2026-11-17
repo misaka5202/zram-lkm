@@ -13,6 +13,25 @@
 `10001`–`10003` 这种小数字；如果新版本继续用小数字，KernelSU 更新器会认为
 版本更低而不推送。日期编码天然单调递增，不会再因版本重置而倒退。
 
+## v0.1.6（未发布）
+
+### 变更
+
+**KallRecon 成为首选解析途径。** `extra/kallrecon/` 直接解析内核的 kallsyms
+表，符号解析不再以 kprobe 为前提：不依赖 `register_kprobe`，不受 kprobe 黑名单
+限制（`aarch64_insn_patch_text_nosync` 这类也能查到），也不受 `kptr_restrict`
+影响。KallRecon 布局探测失败时仍退回 kprobe 探测。五个解析符号的模块
+（lz4hc / 842 / zstdn / zram_list 与解析器自身）统一走
+`extra/compat/zram_symres.h`。
+
+**`zram_list` 不再自带第二份解析实现。** 它的 `zl_lookup_probe`/`zl_lookup`
+与 `zr_lookup_probe`/`zr_lookup` 逐字相同，现在五个模块共用一个入口。
+
+### 验证
+
+全 KMI 矩阵编译通过；6.1 产物的 `.symtab` 里 `find_kallsyms_base` /
+`kallrecon_klp` 已解析（不再是未定义符号），确认引擎真的链进去了。
+
 ## v0.1.5
 
 `versionCode` 20261120。

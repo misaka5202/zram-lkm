@@ -90,11 +90,14 @@ Three of the modules are in that position on Qualcomm `SM7675 / 6.1.138`:
 | `lz4hc` | the two above, plus `LZ4_compress_HC` and `LZ4_decompress_safe` |
 | `zstdn` | the two above, plus ten `zstd_*()` entry points |
 
-They resolve those addresses at init instead: a kprobe on
-`kallsyms_lookup_name()` yields the lookup function, and every symbol comes
-from there (`extra/compat/zram_symres.h`). Calls go through function pointers,
-and every function that does so is marked `__nocfi` — `CONFIG_CFI_CLANG`
-validates indirect call targets and would otherwise refuse the call.
+They resolve those addresses at init instead. `extra/compat/zram_symres.h`
+tries **KallRecon** first (`extra/kallrecon/`): it parses the kernel's kallsyms
+table directly, so resolution needs no kprobe, is unaffected by `kptr_restrict`,
+and can even find targets on the kprobe blacklist. When KallRecon's layout
+discovery fails it falls back to the older route, a kprobe on
+`kallsyms_lookup_name()`. Calls go through function pointers, and every function
+that does so is marked `__nocfi` — `CONFIG_CFI_CLANG` validates indirect call
+targets and would otherwise refuse the call.
 
 **What it costs.** The lookups happen once, at `insmod`. Measured load time does
 not move with the number of symbols: `lz4k` (0 symbols), `lz4hc` (4) and
