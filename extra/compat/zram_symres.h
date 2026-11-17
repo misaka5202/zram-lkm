@@ -21,7 +21,9 @@
  * 白名单里），拿到之后所有符号都交给它查 —— kprobe 只能找到"可探测"的函数，
  * 而 kallsyms_lookup_name 能查 kallsyms 里的任何东西。
  *
- * 和 zram_list_main.c 里那套是同一个做法，这里抽出来给三个 crypto 模块共用。
+ * 本文件是 zram-lkm 全部五个模块**唯一**的符号解析入口：lz4hc / 842 / zstdn
+ * 用 ZR_SYM / ZR_REQUIRE，zram_list 直接调 zr_lookup。此前 zram_list 另有一份
+ * 逐字相同的 kprobe 探测实现，已并入这里（同一个模式抄两遍，改一处漏一处）。
  *
  * CFI 注意
  * --------
