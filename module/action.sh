@@ -7,7 +7,7 @@
 
 MODDIR=${0%/*}
 [ "$MODDIR" = "$0" ] && MODDIR=.
-LOG=/data/local/tmp/zram_lkm.log
+LOG="$MODDIR/zram_lkm.log"
 
 ZR_I18N="$MODDIR/i18n.sh"
 [ -f "$ZR_I18N" ] || ZR_I18N=/data/adb/modules/zram_lkm/i18n.sh

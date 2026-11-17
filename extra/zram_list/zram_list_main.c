@@ -47,6 +47,7 @@
 #include <linux/types.h>
 #include <linux/vmalloc.h>
 #include <linux/workqueue.h>
+#include <asm/cacheflush.h>
 
 #define ZL_NAME		"zram_list"
 #define ZL_REACH	0x7000000UL	/* 112MB：b 的量程留 16MB 余量 */
@@ -151,7 +152,7 @@ static void *zl_alloc_near(unsigned long near, size_t size)
 	if (!zl_vmalloc_range) {
 		zl_vmalloc_range = (zl_vmalloc_range_fn)zl_lookup("__vmalloc_node_range");
 		if (!zl_vmalloc_range) {
-			pr_warn(ZL_NAME ": __vmalloc_node_range unresolved' + BS + 'n");
+			pr_warn(ZL_NAME ": __vmalloc_node_range unresolved\n");
 			return NULL;
 		}
 	}
@@ -205,7 +206,7 @@ static void *zl_alloc_near(unsigned long near, size_t size)
 				}
 			}
 		}
-		pr_info(ZL_NAME ": no vmap hole in any window around %px' + BS + 'n",
+		pr_info(ZL_NAME ": no vmap hole in any window around %px\n",
 			(void *)near);
 		return NULL;
 	}
@@ -466,6 +467,17 @@ static int zl_install(void)
 	w[5] = 0x58000051;		/* ldr x17, #8 */
 	w[6] = 0xD61F0220;		/* br  x17     */
 	((u64 *)&w[7])[0] = (u64)(unsigned long)zl_show;
+
+	/*
+	 * [F-5] trampoline 是用普通数据写（w[...] = …）填进 vmalloc 可执行页
+	 * 的，arm64 的 icache 与 dcache 不保证一致。zl_patch_insn 内部只对
+	 * **目标函数**那一处指令做 caches_clean_inval_pou，管不到 trampoline
+	 * 这一页。所以入口被 b 过来时，其它 CPU（甚至本 CPU 在 isb 之后）可能
+	 * 从 icache 取到这一页的陈旧（未初始化）内容。写入后、patch 入口前，
+	 * 显式把 trampoline 整页刷到一致。
+	 */
+	flush_icache_range((unsigned long)zl_tramp,
+			   (unsigned long)zl_tramp + 64);
 
 	zl_orig = (zcomp_available_show_fn)zl_tramp;
 

@@ -57,12 +57,30 @@ jobs:
       - name: 创建 pre-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 输入必须走 env 而不是 `${{ inputs.tag }}` 内联：Actions 在 shell
+          # 解析**之前**做字符串替换，内联时一个含 `"` / `;` / `$( )` 的 tag
+          # 输入就能逃逸引号在 runner 上执行任意命令（GitHub 官方警示的
+          # script-injection 模式）。走 env 后值永远是数据，不进语法。
+          DISPATCH_TAG: ${{ inputs.tag }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            TAG="$DISPATCH_TAG"
           else
             TAG="${GITHUB_REF_NAME}"
+          fi
+          # 白名单：只接受 vX.Y.Z（可带 -suffix）。必须用锚定的正则而不是
+          # shell case —— case 的 `*` 能匹配任意字符，"v1.2.3; curl evil"
+          # 这类输入会整条放过，白名单形同虚设。另外先按行数校验：grep 是按
+          # 行匹配的，不挡住换行就会让 "v1.2.3\n<恶意行>" 因首行命中而整条通过。
+          if [ "$(printf '%s\n' "$TAG" | wc -l)" -ne 1 ]; then
+            echo "::error::tag 含换行或为空"
+            exit 1
+          fi
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::非法 tag 名: $TAG"
+            exit 1
           fi
           # 正文由 scripts/release_notes.sh 生成，格式对齐 KernelSU 的 release：
           #   vX.Y.Z / ## What's Changed / ## Supported kernels / Full Changelog

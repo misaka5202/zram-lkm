@@ -68,7 +68,7 @@ M_EXTRA="Extra     : zram_list (makes the module algorithms show in comp_algorit
 M_LOAD_ONLY="Loads the modules only, does not switch algorithms"
 M_SWITCH_RISK="  switching rebuilds the zram contents; doing that at boot risks data loss"
 M_MANUAL_SWITCH="Manual switch:"
-M_LOG_PATH="Log: /data/local/tmp/zram_lkm.log"
+M_LOG_PATH="Log: /data/adb/modules/zram_lkm/zram_lkm.log"
 M_REBOOT_HINT="Reboot after installation"
 
 # --- action.sh ---
@@ -133,7 +133,7 @@ zh)
     M_LOAD_ONLY="只加载模块，不自动切换算法"
     M_SWITCH_RISK="  切换会重建 zram 内容，开机阶段做这件事有掉数据风险"
     M_MANUAL_SWITCH="手动切换:"
-    M_LOG_PATH="日志: /data/local/tmp/zram_lkm.log"
+    M_LOG_PATH="日志: /data/adb/modules/zram_lkm/zram_lkm.log"
     M_REBOOT_HINT="安装完成后请重启设备"
 
     M_A_LOADED="=== 已加载的算法模块 ==="
@@ -191,7 +191,7 @@ ja)
     M_LOAD_ONLY="モジュールを読み込むだけで、アルゴリズムは切り替えません"
     M_SWITCH_RISK="  切り替えると zram の内容が再構築されます。起動時にこれを行うとデータ消失の恐れがあります"
     M_MANUAL_SWITCH="手動切り替え:"
-    M_LOG_PATH="ログ: /data/local/tmp/zram_lkm.log"
+    M_LOG_PATH="ログ: /data/adb/modules/zram_lkm/zram_lkm.log"
     M_REBOOT_HINT="インストール後に再起動してください"
 
     # action.sh
