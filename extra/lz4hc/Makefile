@@ -7,9 +7,8 @@
 # 而且 LZ4_compress_HC() 与 LZ4_decompress_safe() 都是 EXPORT_SYMBOL，
 # 模块可以直接调用。缺的只是 crypto 那一层注册胶水（CONFIG_CRYPTO_LZ4HC
 # 没开），这正是本模块补的东西。
-obj-m += lz4hc.o
-lz4hc-y := lz4hc_crypto.o $(KR_OBJS)
-
 # KallRecon：运行时解析未导出符号（与 droidspaces-lkm 的 cgrouplimits 同源）
 KR_OBJS := kallrecon/core.o kallrecon/access.o kallrecon/discover.o kallrecon/symbol.o kallrecon/slide.o kallrecon/fastboot.o kallrecon/hint.o kallrecon/variant.o kallrecon/anchor.o
+obj-m += lz4hc.o
+lz4hc-y := lz4hc_crypto.o $(KR_OBJS)
 ccflags-y += -Wno-declaration-after-statement -Wno-unused-variable -Wno-unused-function -Wno-strict-prototypes -Wno-gcc-compat -Wno-incompatible-function-pointer-types
