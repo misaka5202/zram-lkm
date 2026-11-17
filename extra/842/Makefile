@@ -8,9 +8,8 @@
 #
 # 不是必须装：只有内核缺 842 时它才有意义；已内置 842 的内核上加载会因为
 # 名字已被占用而失败，KSU 加载脚本会跳过。
-obj-m += 842.o
-842-y := 842_crypto.o 842_compress.o 842_decompress.o $(KR_OBJS)
-
 # KallRecon：运行时解析未导出符号（与 droidspaces-lkm 的 cgrouplimits 同源）
 KR_OBJS := kallrecon/core.o kallrecon/access.o kallrecon/discover.o kallrecon/symbol.o kallrecon/slide.o kallrecon/fastboot.o kallrecon/hint.o kallrecon/variant.o kallrecon/anchor.o
+obj-m += 842.o
+842-y := 842_crypto.o 842_compress.o 842_decompress.o $(KR_OBJS)
 ccflags-y += -Wno-declaration-after-statement -Wno-unused-variable -Wno-unused-function -Wno-strict-prototypes -Wno-gcc-compat -Wno-incompatible-function-pointer-types
