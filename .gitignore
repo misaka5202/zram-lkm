@@ -10,6 +10,10 @@
 Module.symvers
 modules.order
 
+# KallRecon 是公共源码（extra/kallrecon/），构建时 staging 进各模块目录，
+# 那份副本不入库（见 scripts/build_modules.sh 的 stage_kallrecon）
+extra/*/kallrecon/
+
 # kernel build artifacts
 *.o
 *.o.d
