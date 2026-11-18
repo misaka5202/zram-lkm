@@ -265,7 +265,8 @@ jobs:
             # symcheck 在合并包那步被拷到 $STAGE/（ko-all/symcheck-*.txt），
             # dist/ 里没有 —— 原来写 cp dist/symcheck-*.txt 是无效路径，被
             # `|| true` 吞掉，导致单 KMI 包一直没带清单（v0.1.6 才发现）。
-            cp "$STAGE"/symcheck-*.txt "$S/" 2>/dev/null || true
+            # 只放本 KMI 那一份：单包用户只关心自己内核的导出差异。
+            cp "$STAGE/symcheck-$kmi.txt" "$S/" 2>/dev/null || true
             chmod 755 "$S"/*.sh
             sed -i 's/\r$//' "$S"/*.sh "$S/module.prop"
             ( cd "$S" && zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-$VER-$kmi-arm64.zip" . )
