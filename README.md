@@ -31,9 +31,9 @@ them as builds to try and report on.
 | `lz4k` | `lz4k` | Huawei | better ratio, speed close to LZ4 |
 | `lz4kd` | `lz4kd` | Huawei | delta variant, exploits page similarity |
 | `lz4k_oplus` | `lz4k_oplus` | OPPO | OPPO's branch of LZ4K |
-| `lz4hc` | `lz4hc` | upstream LZ4 | best ratio of the LZ4 family; `lz4hc_level=` 3-16 |
-| `842` | `842` | IBM | carries the lib/842 reference codec; vendor kernels trim both `CONFIG_CRYPTO_842` and the codec itself. Slow -- present for completeness, not as a default |
-| `zstdn` / `zstdn_o` | `zstdn`, `zstdn_o` | OPPO | OnePlus ships these as `oplus_bsp_zstdn`; same codec as `zstd` but driven at level 1 (`ZSTD_DEF_LEVEL 1`). Thin module: reuses the kernel's zstd, no codec copy |
+| `lz4hc` | `lz4hc` | [upstream LZ4](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/lz4) | best ratio of the LZ4 family; `lz4hc_level=` 3-16 |
+| `842` | `842` | [IBM, kernel lib/842](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/842) | carries the lib/842 reference codec; vendor kernels trim both `CONFIG_CRYPTO_842` and the codec itself. Slow -- present for completeness, not as a default |
+| `zstdn` / `zstdn_o` | `zstdn`, `zstdn_o` | [OPPO, OnePlus 15 kernel](https://github.com/OnePlusOSS/android_kernel_oneplus_sm8850) | OnePlus ships these as `oplus_bsp_zstdn`; same codec as `zstd` but driven at level 1 (`ZSTD_DEF_LEVEL 1`). Thin module: reuses the kernel's zstd, no codec copy |
 
 `lz4hc` is a registration-only module: it calls the `LZ4_compress_HC` /
 `LZ4_decompress_safe` the kernel already exports, so it carries no codec of its
@@ -453,6 +453,8 @@ standalone Makefiles).
 | `lz4k` / `lz4kd` | Huawei Technologies | GPL-2.0 |
 | `lz4k_oplus` | OPPO branch | GPL-2.0 |
 | `extra/kallrecon/` | [Dere3046/KallRecon](https://github.com/Dere3046/KallRecon) | GPL-2.0 |
+| `842` | [kernel lib/842](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/842) — Dan Streetman, IBM Corp | GPL-2.0 |
+| `zstdn` / `zstdn_o` | [OnePlus 15 (sm8850) kernel](https://github.com/OnePlusOSS/android_kernel_oneplus_sm8850), `vendor/oplus/kernel/mm/zstd_o/` | GPL-2.0 |
 
 **GPL-2.0 requires source for binaries.** Every release carries
 `source-<tag>.tar.gz`, the exact tree the `.ko` files were built from.

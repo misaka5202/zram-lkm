@@ -29,9 +29,9 @@
 | `lz4k` | `lz4k` | 华为 | 压缩率更高，速度接近 LZ4 |
 | `lz4kd` | `lz4kd` | 华为 | LZ4K 的 delta 变体，利用页间相似性 |
 | `lz4k_oplus` | `lz4k_oplus` | OPPO | LZ4K 的 OPPO 分支实现 |
-| `lz4hc` | `lz4hc` | 上游 LZ4 | LZ4 系里压缩率最高；`lz4hc_level=` 可调 3-16 |
-| `842` | `842` | IBM | 自带 lib/842 参考实现；厂商内核通常把 `CONFIG_CRYPTO_842` 和编解码器一起裁掉。速度很慢，只为补齐算法，不作默认 |
-| `zstdn` / `zstdn_o` | `zstdn`, `zstdn_o` | OPPO | 一加把它做成 `oplus_bsp_zstdn`；和 `zstd` 同一套编解码，但跑在 level 1（`ZSTD_DEF_LEVEL 1`）。薄模块，复用内核 zstd，不复制编解码器 |
+| `lz4hc` | `lz4hc` | [上游 LZ4](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/lz4) | LZ4 系里压缩率最高；`lz4hc_level=` 可调 3-16 |
+| `842` | `842` | [IBM，内核 lib/842](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/842) | 自带 lib/842 参考实现；厂商内核通常把 `CONFIG_CRYPTO_842` 和编解码器一起裁掉。速度很慢，只为补齐算法，不作默认 |
+| `zstdn` / `zstdn_o` | `zstdn`, `zstdn_o` | [OPPO，一加 15 内核](https://github.com/OnePlusOSS/android_kernel_oneplus_sm8850) | 一加把它做成 `oplus_bsp_zstdn`；和 `zstd` 同一套编解码，但跑在 level 1（`ZSTD_DEF_LEVEL 1`）。薄模块，复用内核 zstd，不复制编解码器 |
 
 `lz4hc` 是**只做注册**的模块：它直接调用内核已经导出的 `LZ4_compress_HC` /
 `LZ4_decompress_safe`，自己不携带编解码器。厂商内核通常把编解码器编了
@@ -424,6 +424,8 @@ module/
 | `lz4k` / `lz4kd` | 华为（Huawei Technologies） | GPL-2.0 |
 | `lz4k_oplus` | OPPO 分支 | GPL-2.0 |
 | `extra/kallrecon/` | [Dere3046/KallRecon](https://github.com/Dere3046/KallRecon) | GPL-2.0 |
+| `842` | [内核 lib/842](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/lib/842) — Dan Streetman, IBM Corp | GPL-2.0 |
+| `zstdn` / `zstdn_o` | [一加 15（sm8850）内核](https://github.com/OnePlusOSS/android_kernel_oneplus_sm8850)，`vendor/oplus/kernel/mm/zstd_o/` | GPL-2.0 |
 
 **GPL-2.0 要求分发二进制时提供对应源码。** 每个 Release 附带的
 `source-<tag>.tar.gz` 就是编出该版本 ko 的完整源码快照。
