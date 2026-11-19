@@ -94,4 +94,4 @@ jobs:
             --title "$TAG" \
             --prerelease \
             --notes-file notes.md \
-            dist/*.ko dist/*.zip dist/source-*.tar.gz
+            dist/*.zip dist/source-*.tar.gz
