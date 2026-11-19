@@ -1,8 +1,33 @@
 # ZRAM LKM
 
-**在原始 Android GKI 内核上以可加载模块的方式扩展 ZRAM 压缩算法 —— 不重编内核、不刷 boot。**
+> **在原始 Android GKI 内核上，用可加载模块补回 ZRAM 压缩算法** —— lz4k、
+> lz4kd、lz4k_oplus、lz4hc、842、zstdn，外加 `zram_list` 让模块提供的算法
+> 出现在 `comp_algorithm` 里。按 KMI 分别构建，开机按 `uname -r` 选择：
+> 不重编内核、不刷 boot。
 
-[English](README.md) · [Releases](../../releases/latest)
+> [![Build](https://github.com/misaka5202/zram-lkm/actions/workflows/build.yml/badge.svg)](https://github.com/misaka5202/zram-lkm/actions/workflows/build.yml)
+
+> **简体中文** | [English](README.md)
+
+---
+
+## 文档导航
+
+| 文档 | 内容 |
+|------|------|
+| [Releases](../../releases/latest) | 预览版下载：合并包 + 按 KMI 分包 + 源码快照 |
+| [支持的 KMI](#9-支持的-kmi) | 精确的逐 KMI 构建矩阵 |
+| [算法说明](docs/ZRAM-ALGORITHMS.zh-CN.md) | zram 能用的七个名字，以及为什么大多缺失 |
+| [变更日志](docs/CHANGELOG.zh-CN.md) | 每个版本修了什么 |
+| [新建 issue](https://github.com/misaka5202/zram-lkm/issues/new/choose) | 需要附哪些信息，才能区分构建问题与环境不匹配 |
+| [droidspaces-lkm](https://github.com/misaka5202/droidspaces-lkm) | 容器支持 LKM：namespace、vkms、cgroup 限制 |
+| [anland](https://github.com/misaka5202/anland) | 把容器桌面显示到 Android 上的 Wayland 宿主 |
+| [6.x rootfs 构建器](https://github.com/misaka5202/Droidspaces-anland6-rootfs) | 为该桌面准备的硬件加速镜像 |
+
+> [!IMPORTANT]
+> **还没有正式版本。** 这里发布的每个 tag 都是 GitHub **pre-release（预览版）**。
+> 这些模块验证到「七个 KMI 都能编、在一个真机上能加载能压」；还没有跨厂商回归，
+> 所以请当成「试一试用、有问题反馈」的构建。
 
 ---
 
@@ -10,19 +35,13 @@
 其余算法（尤其 LZ4K 系列）在编译期就被裁掉了。本项目把这些算法做成 `.ko`，
 `insmod` 即可用，甚至在写 `comp_algorithm` 时会**自动按需加载**。
 
-## 项目状态
-
-**还没有正式版本。** 这里发布的每个 tag 都是 GitHub **pre-release（预览版）**。
-这些模块验证到"七个 KMI 都能编、在一个真机上能加载能压"；还没有跨厂商回归，
-所以请当成"试一试用、有问题反馈"的构建。
-
 | | |
 |---|---|
 | CI 做什么 | 编译全部 KMI，**不发布**；`.ko` 只作为 Actions artifact 保留 |
 | Release 做什么 | 只在打 tag（`vX.Y.Z`）时运行，发布**预览版** |
 | 去哪反馈 | [新建 issue](https://github.com/misaka5202/zram-lkm/issues/new/choose) |
 
-## 包含的算法
+## 1. 包含的算法
 
 | 模块 | 算法名 | 来源 | 相对 lzo-rle |
 |------|--------|------|--------------|
@@ -41,7 +60,7 @@
 强制——完整清单、为什么 `comp_algorithm` 只显示其中一部分、以及怎么查设备，
 见 [ZRAM-ALGORITHMS.zh-CN.md](docs/ZRAM-ALGORITHMS.zh-CN.md)。
 
-## 为什么能做成模块
+## 2. 为什么能做成模块
 
 关键在**压缩算法不是内核私有结构，而是 crypto 算法名空间的一部分**：
 
@@ -68,7 +87,7 @@ modprobe 找到 lz4k.ko 的 MODULE_ALIAS_CRYPTO("lz4k")
 这类是**代码路径级**的编译开关，被 `#ifdef` 整段删除，模块没有可挂的点。
 压缩算法不属于这一类。
 
-## 厂商没导出的符号
+## 3. 厂商没导出的符号
 
 有些厂商内核把函数留在 `kallsyms` 里，却没有导出。模块静态引用这种符号会
 直接 `Unknown symbol` 装不上 —— 哪怕代码本体就在镜像里。
@@ -94,7 +113,7 @@ modprobe 找到 lz4k.ko 的 MODULE_ALIAS_CRYPTO("lz4k")
 那是模块加载器本身的成本。运行期唯一的差别是每次编解码调用多一层间接跳转，
 而且只在 `lz4hc` 和 `zstdn` 上 —— `842` 自带编解码器，热路径一次都没有。
 
-### 和「内核内置」版本的实测对比
+### 3.1 和「内核内置」版本的实测对比
 
 「每次调用多一层间接跳转」只是推理。下面是实测：刷了一颗把这些算法全部编进
 内核的 6.1，于是同一台设备上同一个算法存在两份 —— 一份是内核代码直接调用，
@@ -124,7 +143,7 @@ Redmi Pad `2410CRP4CG` / `SM7675` / `6.1.138-android14-11-g5929004f86ffc-…-4k`
 进来，i-cache 和分支预测器都是冷的。先热身一次、把这个样本丢掉，差距就完全
 消失了。**交替测量救不了这个**，因为冷样本是跟着每一次 `insmod` 走的。
 
-### 如果内核本来就有这些算法
+### 3.2 如果内核本来就有这些算法
 
 模块注册的算法名和内核完全一样，最后 `zram` 用哪一份取决于 `cra_priority`：
 
@@ -166,7 +185,7 @@ python3 scripts/gen_symproto.py --btf vmlinux.btf \
 `zstdn` 保持 `typeof(&f)`：那十个函数 `<linux/zstd.h>` 已经声明了，`typeof`
 不可能和声明漂移；生成的头只覆盖没有包含对应头文件的那些符号。
 
-## 装模块的代价
+## 4. 装模块的代价
 
 模块里的编解码器跑起来和内核自带的同样快，但「装」本身不是免费的。两项成本
 都在 `post-fs-data` 里一次付清：
@@ -203,7 +222,7 @@ python3 scripts/gen_symproto.py --btf vmlinux.btf \
 同一台设备、各跑三次取中位数。第二行仍然要装全部，赚到的只是脚本侧的优化，
 所以幅度小一些。
 
-## 安装
+## 5. 安装
 
 下载 `zram-lkm-<版本>-arm64.zip`（全 KMI）或
 `zram-lkm-<版本>-<kmi>-arm64.zip`（单 KMI），例如 `zram-lkm-v0.1.4-arm64.zip`，
@@ -224,7 +243,7 @@ cat /sys/block/zram0/comp_algorithm
 #                                      ^^^^ 出现了
 ```
 
-## 切换算法
+## 6. 切换算法
 
 **注意：切 `comp_algorithm` 会重置 zram0，现有内容全部丢失。** Android 通常把
 zram0 当 swap 用，所以顺序很重要：
@@ -255,7 +274,7 @@ AUTO_SWITCH=1
 默认 `AUTO_SWITCH=0`。开机阶段自动切换会清掉 swap 里已有的页，内存紧张的
 设备上这是实打实的风险，所以默认留给你自己决定时机。
 
-## 选择算法
+## 7. 选择算法
 
 没有放之四海而皆准的答案，取决于你的负载：
 
@@ -308,7 +327,7 @@ grep -E 'orig_data_size|compr_data_size' /sys/block/zram0/mm_stat
 
 第 1 列是原始大小，第 2 列是压缩后大小 —— 两者比值就是实际压缩率。
 
-## 还有哪些能做成模块，哪些不能
+## 8. 还有哪些能做成模块，哪些不能
 
 "能不能用模块加 X"其实有三种答案，值得分开说：
 
@@ -335,7 +354,7 @@ grep -E 'orig_data_size|compr_data_size' /sys/block/zram0/mm_stat
 
 算法注册是唯一一个答案明确为"能"的类型，所以本项目只待在这一行。
 
-## 支持的 KMI
+## 9. 支持的 KMI
 
 | KMI | 内核 |
 |-----|------|
@@ -349,7 +368,7 @@ grep -E 'orig_data_size|compr_data_size' /sys/block/zram0/mm_stat
 
 **仅 arm64。**
 
-## 更多扩展：换掉 zram.ko 本身
+## 10. 更多扩展：换掉 zram.ko 本身
 
 如果设备是 `CONFIG_ZRAM=m`（很多厂商是），那 zram 本身也是模块，
 可以**自带一份 zram.ko** 替换厂商的：
@@ -378,7 +397,7 @@ zcat /proc/config.gz | grep -E '^CONFIG_ZRAM=|^CONFIG_ZSMALLOC='
 # CONFIG_ZRAM=y        ← 编进内核了，换不了
 ```
 
-## 构建与发布
+## 11. 构建与发布
 
 两个工作流，**刻意分开**：
 
@@ -397,7 +416,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-### 模块目录结构
+### 11.1 模块目录结构
 
 ```
 module/
@@ -413,7 +432,7 @@ module/
 `system/lib/modules/`**。KernelSU 只有在装了 metamodule 时才会挂载 `system/`，
 原来那种放法等于悄悄给用户加了一个前提，没装 metamodule 的人会直接加载失败。
 
-## 源码与许可证
+## 12. 源码与许可证
 
 算法源码来自 [SukiSU_patch](https://github.com/Pixel-Tent/SukiSU_patch) /
 [ABK](https://github.com/cachiusa/AnyKernel3) 的内核树补丁，本项目把它们改造为

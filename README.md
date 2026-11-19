@@ -1,8 +1,34 @@
 # ZRAM LKM
 
-**Extend ZRAM compression algorithms on a stock Android GKI kernel with loadable modules — no kernel rebuild, no boot image flashing.**
+> **Extra ZRAM compressors for a stock Android GKI kernel, as loadable modules**
+> — lz4k, lz4kd, lz4k_oplus, lz4hc, 842 and zstdn, plus `zram_list` so
+> module-provided algorithms appear in `comp_algorithm`. Built per KMI and
+> selected at boot by `uname -r`: no kernel rebuild, no boot image flashing.
 
-[中文说明](README.zh-CN.md) · [Releases](../../releases/latest)
+> [![Build](https://github.com/misaka5202/zram-lkm/actions/workflows/build.yml/badge.svg)](https://github.com/misaka5202/zram-lkm/actions/workflows/build.yml)
+
+> **English** | [简体中文](README.zh-CN.md)
+
+---
+
+## User documentation
+
+| Document | What it covers |
+|----------|----------------|
+| [Releases](../../releases/latest) | pre-release downloads: combined + per-KMI zips + source snapshot |
+| [Supported KMI](#9-supported-kmi) | the exact per-KMI build matrix |
+| [Algorithms](docs/ZRAM-ALGORITHMS.md) | the seven names zram can use, and why most are missing |
+| [Changelog](docs/CHANGELOG.md) | what each release fixed |
+| [Report an issue](https://github.com/misaka5202/zram-lkm/issues/new/choose) | what to include so a build problem is distinguishable from an environment mismatch |
+| [droidspaces-lkm](https://github.com/misaka5202/droidspaces-lkm) | container-support LKM: namespaces, vkms, cgroup limits |
+| [anland](https://github.com/misaka5202/anland) | the Wayland host that shows the container desktop on Android |
+| [6.x rootfs builder](https://github.com/misaka5202/Droidspaces-anland6-rootfs) | images with hardware acceleration for that desktop |
+
+> [!IMPORTANT]
+> **No stable release yet.** Every tag here is a GitHub **pre-release (preview)**.
+> These modules are verified to build for all seven KMIs and to load and compress
+> on one device; they have not been regression-tested across vendors, so treat
+> them as builds to try and report on.
 
 ---
 
@@ -11,20 +37,13 @@ algorithm at build time to satisfy GKI ABI checks. This project packages those
 algorithms as `.ko` files you `insmod` — and in fact they load *on demand* when
 zram is asked to use them.
 
-## Project status
-
-**No stable release yet.** Every tag here is a GitHub **pre-release (preview)**.
-These modules are verified to build for all seven KMIs and to load and compress
-on one device; they have not been regression-tested across vendors, so treat
-them as builds to try and report on.
-
 | | |
 |---|---|
 | What CI does | Compiles every KMI, publishes **nothing**; `.ko` files stay as Actions artifacts. |
 | What Release does | Runs only on a tag push (`vX.Y.Z`) and publishes a **pre-release**. |
 | Where to report | [New issue](https://github.com/misaka5202/zram-lkm/issues/new/choose) |
 
-## Algorithms
+## 1. Algorithms
 
 | Module | Algorithm name | Origin | Versus lzo-rle |
 |--------|---------------|--------|----------------|
@@ -45,7 +64,7 @@ use, and zram itself enforces none of them — see
 [docs/ZRAM-ALGORITHMS.md](docs/ZRAM-ALGORITHMS.md) for the list, why
 `comp_algorithm` only ever shows a subset, and how to check a device.
 
-## Why this can be a module
+## 2. Why this can be a module
 
 Compression algorithms are not private kernel structures — they live in the
 crypto algorithm namespace:
@@ -76,7 +95,7 @@ Contrast with what a module **cannot** do: `CONFIG_ZRAM_WRITEBACK` or
 so there is nothing for a module to hook. Compression algorithms are not in
 that category.
 
-## Symbols the vendor did not export
+## 3. Symbols the vendor did not export
 
 Some vendor kernels keep a function in `kallsyms` and still do not export it.
 A module that references such a function statically fails to load with
@@ -107,7 +126,7 @@ itself. At run time the only difference is one more indirect branch per codec
 call, and only on `lz4hc` and `zstdn` — `842` carries its codec, so its hot
 path has none.
 
-### Measured against a kernel that has them built in
+### 3.1 Measured against a kernel that has them built in
 
 "One more indirect branch per call" is an argument. Here is the measurement,
 made possible by flashing a kernel that builds all of these in, so the same
@@ -141,7 +160,7 @@ is freshly mapped and its i-cache and branch-predictor state are cold. Warming
 up once and discarding that sample removed the gap entirely. Alternating the two
 configurations does *not* fix this — the cold sample travels with each `insmod`.
 
-### If your kernel already ships these algorithms
+### 3.2 If your kernel already ships these algorithms
 
 The module registers the same algorithm names the kernel does, so which
 implementation `zram` gets depends on `cra_priority`:
@@ -190,7 +209,7 @@ already declares those ten functions and `typeof` cannot drift from a
 declaration; the generated header covers only the symbols whose headers are not
 included.
 
-## What loading costs
+## 4. What loading costs
 
 Even though a module's codec runs at the same speed as the kernel's own, a
 module is not free. Two costs are paid once, inside `post-fs-data`:
@@ -229,7 +248,7 @@ builtins (`case`, parameter expansion, one `getprop` dump) and reading the two
 Median of three warm runs each on the same device. The second row still loads
 everything; it gained only the shell-side savings, which is why it moved less.
 
-## Install
+## 5. Install
 
 Download `zram-lkm-<version>-arm64.zip` (all KMIs) or
 `zram-lkm-<version>-<kmi>-arm64.zip` (single KMI) — for example
@@ -249,7 +268,7 @@ cat /sys/block/zram0/comp_algorithm
 # lzo lzo-rle [lz4] lz4hc zstd deflate lz4k lz4kd lz4k_oplus
 ```
 
-## Switching algorithms
+## 6. Switching algorithms
 
 **Switching `comp_algorithm` resets zram0 and discards its contents.** Android
 normally uses zram0 as swap, so order matters:
@@ -274,7 +293,7 @@ AUTO_SWITCH=1
 swap, which is a real risk on a memory-constrained device, so the timing is
 left to you.
 
-## Choosing an algorithm
+## 7. Choosing an algorithm
 
 There is no universal winner; it depends on the workload.
 
@@ -328,7 +347,7 @@ grep -E 'orig_data_size|compr_data_size' /sys/block/zram0/mm_stat
 Field 1 is original size and field 2 is compressed size; their ratio is the
 real compression ratio.
 
-## What else could be a module, and what cannot
+## 8. What else could be a module, and what cannot
 
 Worth separating the three cases, because "can I add X with a module?" has
 three different answers:
@@ -361,7 +380,7 @@ Not implemented here, deliberately:
 Algorithm registration is the one row where the answer is unambiguously yes,
 which is why this project stays in that row.
 
-## Supported KMI
+## 9. Supported KMI
 
 | KMI | Kernel |
 |-----|--------|
@@ -375,7 +394,7 @@ which is why this project stays in that row.
 
 **arm64 only.**
 
-## Going further: replacing zram.ko itself
+## 10. Going further: replacing zram.ko itself
 
 If your device has `CONFIG_ZRAM=m` — many vendor kernels do — then zram is a
 module too, and you can ship your **own** zram.ko:
@@ -405,7 +424,7 @@ zcat /proc/config.gz | grep -E '^CONFIG_ZRAM=|^CONFIG_ZSMALLOC='
 # CONFIG_ZRAM=y        ← built in, cannot replace
 ```
 
-## Build and release
+## 11. Build and release
 
 Two workflows, deliberately separate:
 
@@ -423,7 +442,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-### Module layout
+### 11.1 Module layout
 
 ```
 module/
@@ -440,7 +459,7 @@ there. They are **not** placed under `system/lib/modules`: KernelSU only mounts
 `system/` when a metamodule is installed, so that layout silently requires
 something the user may not have.
 
-## Sources and licensing
+## 12. Sources and licensing
 
 The algorithms come from the kernel-tree patches in
 [SukiSU_patch](https://github.com/Pixel-Tent/SukiSU_patch) /
