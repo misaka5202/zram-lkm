@@ -21,8 +21,9 @@ backwards.
 
 ### Changed
 
-**KallRecon is now the primary resolver.** `extra/kallrecon/` parses the
-kernel's kallsyms table directly, so symbol resolution no longer depends on
+**KallRecon is now the primary resolver.** `extra/kallrecon/` — vendored from
+[Dere3046/KallRecon](https://github.com/Dere3046/KallRecon), see
+`extra/kallrecon/ORIGIN.md` — parses the kernel's kallsyms table directly, so symbol resolution no longer depends on
 kprobe: no `register_kprobe` requirement, no kprobe blacklist (targets such as
 `aarch64_insn_patch_text_nosync` resolve fine), and independent of
 `kptr_restrict`. The kprobe probe remains as a fallback when KallRecon's layout

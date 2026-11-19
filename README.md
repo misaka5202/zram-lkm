@@ -91,9 +91,10 @@ Three of the modules are in that position on Qualcomm `SM7675 / 6.1.138`:
 | `zstdn` | the two above, plus ten `zstd_*()` entry points |
 
 They resolve those addresses at init instead. `extra/compat/zram_symres.h`
-tries **KallRecon** first (`extra/kallrecon/`): it parses the kernel's kallsyms
-table directly, so resolution needs no kprobe, is unaffected by `kptr_restrict`,
-and can even find targets on the kprobe blacklist. When KallRecon's layout
+tries [**KallRecon**](https://github.com/Dere3046/KallRecon) first
+(`extra/kallrecon/`, vendored byte-for-byte from upstream `lib/`): it parses the
+kernel's kallsyms table directly, so resolution needs no kprobe, is unaffected
+by `kptr_restrict`, and can even find targets on the kprobe blacklist. When KallRecon's layout
 discovery fails it falls back to the older route, a kprobe on
 `kallsyms_lookup_name()`. Calls go through function pointers, and every function
 that does so is marked `__nocfi` — `CONFIG_CFI_CLANG` validates indirect call
@@ -451,6 +452,7 @@ standalone Makefiles).
 |-----------|--------|---------|
 | `lz4k` / `lz4kd` | Huawei Technologies | GPL-2.0 |
 | `lz4k_oplus` | OPPO branch | GPL-2.0 |
+| `extra/kallrecon/` | [Dere3046/KallRecon](https://github.com/Dere3046/KallRecon) | GPL-2.0 |
 
 **GPL-2.0 requires source for binaries.** Every release carries
 `source-<tag>.tar.gz`, the exact tree the `.ko` files were built from.

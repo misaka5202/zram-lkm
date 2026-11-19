@@ -17,8 +17,9 @@
 
 ### 变更
 
-**KallRecon 成为首选解析途径。** `extra/kallrecon/` 直接解析内核的 kallsyms
-表，符号解析不再以 kprobe 为前提：不依赖 `register_kprobe`，不受 kprobe 黑名单
+**KallRecon 成为首选解析途径。** `extra/kallrecon/` 来自
+[Dere3046/KallRecon](https://github.com/Dere3046/KallRecon)（见
+`extra/kallrecon/ORIGIN.md`），直接解析内核的 kallsyms 表，符号解析不再以 kprobe 为前提：不依赖 `register_kprobe`，不受 kprobe 黑名单
 限制（`aarch64_insn_patch_text_nosync` 这类也能查到），也不受 `kptr_restrict`
 影响。KallRecon 布局探测失败时仍退回 kprobe 探测。五个解析符号的模块
 （lz4hc / 842 / zstdn / zram_list 与解析器自身）统一走

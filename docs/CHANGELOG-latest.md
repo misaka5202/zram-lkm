@@ -4,7 +4,9 @@
 
 ### 变更
 
-**KallRecon 成为首选解析器。** `extra/kallrecon/` 直接解析内核的 kallsyms 表，
+**KallRecon 成为首选解析器。** `extra/kallrecon/` 来自
+[Dere3046/KallRecon](https://github.com/Dere3046/KallRecon)，直接解析内核的
+kallsyms 表，
 符号解析不再以 kprobe 为前提：不要求 `register_kprobe`、不受 kprobe 黑名单限制
 （`aarch64_insn_patch_text_nosync` 这类也能解析）、与 `kptr_restrict` 无关。
 KallRecon 布局探测失败时仍回退到 kprobe 探测。五个解析符号的模块

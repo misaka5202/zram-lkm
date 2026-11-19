@@ -82,7 +82,8 @@ modprobe 找到 lz4k.ko 的 MODULE_ALIAS_CRYPTO("lz4k")
 | `zstdn` | 上面两个，加十个 `zstd_*()` 入口 |
 
 做法改成 init 时解析地址。`extra/compat/zram_symres.h` 优先走
-**KallRecon**（`extra/kallrecon/`）：直接解析内核的 kallsyms 表，不依赖 kprobe、
+[**KallRecon**](https://github.com/Dere3046/KallRecon)（`extra/kallrecon/`，
+从上游 `lib/` 逐字节 vendoring）：直接解析内核的 kallsyms 表，不依赖 kprobe、
 不受 `kptr_restrict` 影响，连 kprobe 黑名单里的目标也能查到。KallRecon 布局
 探测失败时退回旧路径 —— 用 kprobe 取 `kallsyms_lookup_name()` 再逐个查。
 调用走函数指针，凡是这样调用的函数都标了 `__nocfi` —— `CONFIG_CFI_CLANG`
@@ -422,6 +423,7 @@ module/
 |------|------|--------|
 | `lz4k` / `lz4kd` | 华为（Huawei Technologies） | GPL-2.0 |
 | `lz4k_oplus` | OPPO 分支 | GPL-2.0 |
+| `extra/kallrecon/` | [Dere3046/KallRecon](https://github.com/Dere3046/KallRecon) | GPL-2.0 |
 
 **GPL-2.0 要求分发二进制时提供对应源码。** 每个 Release 附带的
 `source-<tag>.tar.gz` 就是编出该版本 ko 的完整源码快照。
