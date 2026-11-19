@@ -226,7 +226,7 @@ python3 scripts/gen_symproto.py --btf vmlinux.btf \
 
 下载 `zram-lkm-<版本>-arm64.zip`（全 KMI）或
 `zram-lkm-<版本>-<kmi>-arm64.zip`（单 KMI），例如 `zram-lkm-v0.1.4-arm64.zip`，
-在 KernelSU / APatch 管理器里刷入，重启。
+在 KernelSU / Magisk 管理器里刷入，重启。
 
 模块在 `post-fs-data` 阶段**只加载模块**，不改动你的 zram 配置 —— 理由见下。
 
