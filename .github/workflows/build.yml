@@ -236,7 +236,7 @@ jobs:
              module/service.sh module/uninstall.sh module/action.sh \
              module/i18n.sh "$STAGE/"
           cp scripts/zram-bench.sh "$STAGE/"
-          cp ko-all/symcheck-*.txt "$STAGE/" 2>/dev/null || true
+          cp ko-all/symcheck-*.txt "$STAGE/ko/" 2>/dev/null || true
           chmod 755 "$STAGE"/*.sh
           sed -i 's/\r$//' "$STAGE"/*.sh "$STAGE/module.prop"
 
@@ -262,11 +262,11 @@ jobs:
                module/service.sh module/uninstall.sh module/action.sh \
                module/i18n.sh "$S/"
             cp scripts/zram-bench.sh "$S/"
-            # symcheck 在合并包那步被拷到 $STAGE/（ko-all/symcheck-*.txt），
-            # dist/ 里没有 —— 原来写 cp dist/symcheck-*.txt 是无效路径，被
-            # `|| true` 吞掉，导致单 KMI 包一直没带清单（v0.1.6 才发现）。
-            # 只放本 KMI 那一份：单包用户只关心自己内核的导出差异。
-            cp "$STAGE/symcheck-$kmi.txt" "$S/" 2>/dev/null || true
+            # action.sh reads $MODDIR/ko/symcheck-<kmi>.txt, so the list has to
+            # land under ko/. Copied from $STAGE/ko (where the merged-package step
+            # put it), and only this KMI's own list: a single-KMI user only cares
+            # about the export differences of their own kernel.
+            cp "$STAGE/ko/symcheck-$kmi.txt" "$S/ko/" 2>/dev/null || true
             chmod 755 "$S"/*.sh
             sed -i 's/\r$//' "$S"/*.sh "$S/module.prop"
             ( cd "$S" && zip -qr1 "$GITHUB_WORKSPACE/dist/zram-lkm-$VER-$kmi-arm64.zip" . )
