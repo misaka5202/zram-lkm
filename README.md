@@ -252,7 +252,7 @@ everything; it gained only the shell-side savings, which is why it moved less.
 
 Download `zram-lkm-<version>-arm64.zip` (all KMIs) or
 `zram-lkm-<version>-<kmi>-arm64.zip` (single KMI) — for example
-`zram-lkm-v0.1.4-arm64.zip` — flash it in KernelSU / APatch, reboot.
+`zram-lkm-v0.1.4-arm64.zip` — flash it in KernelSU / Magisk, reboot.
 
 The module **only loads the modules** during `post-fs-data`; it does not touch
 your zram configuration — see below for why.
